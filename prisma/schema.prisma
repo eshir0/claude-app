@@ -1,0 +1,36 @@
+datasource db {
+  provider = "sqlite"
+}
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+}
+
+enum EntrySource {
+  MANUAL
+  AUTO
+}
+
+model AiUsageEntry {
+  id           String      @id @default(cuid())
+  // Matches an id in src/modules/ai-usage/metrics.ts (USAGE_METRICS).
+  // Validated at the application layer (zod), not a DB enum, so adding a
+  // metric never requires a migration.
+  metricId     String
+  // 0-100, "percent used" (never "percent remaining"). A point-in-time
+  // observation, not a cumulative counter — never summed/diffed.
+  usagePercent Float
+  // No @db.VarChar — SQLite has no variable-length string constraint. The
+  // 500-char cap is enforced in shared zod validation (logic.ts).
+  note         String?
+  source       EntrySource @default(MANUAL)
+  // When the value was actually observed in the service's own UI (UTC).
+  recordedAt   DateTime
+  // When this limit period resets, if known (UTC). Null when unknown.
+  resetsAt     DateTime?
+  // When this row was saved to this app (UTC) — distinct from recordedAt.
+  createdAt    DateTime    @default(now())
+
+  @@index([metricId, recordedAt])
+}

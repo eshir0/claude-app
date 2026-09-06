@@ -1,0 +1,25 @@
+services:
+  app:
+    build: .
+    # No host port binding by default — see README "Deploying" for why a
+    # reverse proxy (not this app) should be the only thing the internet
+    # reaches, and how that also makes login rate limiting trustworthy.
+    # For a quick local check without a proxy, uncomment:
+    # ports:
+    #   - "3000:3000"
+    environment:
+      DATABASE_URL: file:/data/prod.db
+      AUTH_PASSWORD_HASH: ${AUTH_PASSWORD_HASH:?set in .env, see .env.example}
+      SESSION_SECRET: ${SESSION_SECRET:?set in .env, see .env.example}
+      APP_ORIGIN: ${APP_ORIGIN:?set in .env, see .env.example}
+      # Only uncomment both of these if a reverse proxy you control sits in
+      # front of this app and overwrites (not appends to) this header with
+      # the real client address before forwarding. See README.
+      # TRUSTED_PROXY: "true"
+      # CLIENT_IP_HEADER: "X-Forwarded-For"
+    volumes:
+      - sqlite-data:/data
+    restart: unless-stopped
+
+volumes:
+  sqlite-data:
