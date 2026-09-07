@@ -1,0 +1,662 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>사용량 대시보드 안내서</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap');
+
+  :root {
+    --bg: #fafafa;
+    --surface: #ffffff;
+    --surface-2: #f4f4f5;
+    --border: #e4e4e7;
+    --border-strong: #d4d4d8;
+    --ink: #18181b;
+    --ink-2: #52525b;
+    --muted: #8a8a92;
+    --accent: #2563eb;
+    --accent-ink: #1d4ed8;
+    --accent-soft: #eff6ff;
+    --accent-border: #bfdbfe;
+    --good: #16a34a;
+    --good-soft: #f0fdf4;
+    --good-border: #bbf7d0;
+    --warn: #b45309;
+    --warn-soft: #fffbeb;
+    --warn-border: #fde68a;
+    --danger: #dc2626;
+    --danger-soft: #fef2f2;
+    --code-ink: #3f3f46;
+    --shadow: 0 1px 2px rgba(24,24,27,0.04), 0 8px 24px -12px rgba(24,24,27,0.10);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #09090b;
+      --surface: #18181b;
+      --surface-2: #232326;
+      --border: #313134;
+      --border-strong: #3f3f46;
+      --ink: #fafafa;
+      --ink-2: #b4b4bb;
+      --muted: #82828a;
+      --accent: #60a5fa;
+      --accent-ink: #93c5fd;
+      --accent-soft: #14243d;
+      --accent-border: #2c4870;
+      --good: #4ade80;
+      --good-soft: #0f2416;
+      --good-border: #1f4a2c;
+      --warn: #fbbf24;
+      --warn-soft: #2e2408;
+      --warn-border: #574513;
+      --danger: #f87171;
+      --danger-soft: #2e1414;
+      --code-ink: #d4d4d8;
+      --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 8px 24px -12px rgba(0,0,0,0.5);
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #09090b;
+    --surface: #18181b;
+    --surface-2: #232326;
+    --border: #313134;
+    --border-strong: #3f3f46;
+    --ink: #fafafa;
+    --ink-2: #b4b4bb;
+    --muted: #82828a;
+    --accent: #60a5fa;
+    --accent-ink: #93c5fd;
+    --accent-soft: #14243d;
+    --accent-border: #2c4870;
+    --good: #4ade80;
+    --good-soft: #0f2416;
+    --good-border: #1f4a2c;
+    --warn: #fbbf24;
+    --warn-soft: #2e2408;
+    --warn-border: #574513;
+    --danger: #f87171;
+    --danger-soft: #2e1414;
+    --code-ink: #d4d4d8;
+    --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 8px 24px -12px rgba(0,0,0,0.5);
+  }
+
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: "IBM Plex Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+    line-height: 1.7;
+    font-size: 16px;
+    -webkit-font-smoothing: antialiased;
+  }
+  code, .mono, kbd {
+    font-family: "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
+  }
+
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  a:focus-visible, button:focus-visible, summary:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  h1, h2, h3 { text-wrap: balance; font-weight: 700; color: var(--ink); }
+
+  /* ---------- shell / layout ---------- */
+  .shell {
+    display: grid;
+    grid-template-columns: 240px minmax(0, 760px);
+    justify-content: center;
+    gap: 56px;
+    max-width: 1120px;
+    margin: 0 auto;
+    padding: 48px 24px 96px;
+  }
+  @media (max-width: 900px) {
+    .shell { grid-template-columns: minmax(0, 1fr); padding: 28px 18px 72px; }
+    .toc-desktop { display: none; }
+  }
+
+  /* ---------- sidebar TOC ---------- */
+  .toc-desktop {
+    position: sticky;
+    top: 40px;
+    align-self: start;
+    height: fit-content;
+  }
+  .toc-eyebrow {
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin: 0 0 12px;
+  }
+  .toc-desktop ol {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    border-left: 2px solid var(--border);
+  }
+  .toc-desktop a {
+    display: block;
+    padding: 7px 0 7px 16px;
+    margin-left: -2px;
+    border-left: 2px solid transparent;
+    color: var(--ink-2);
+    font-size: 0.92rem;
+  }
+  .toc-desktop a:hover {
+    color: var(--accent);
+    border-left-color: var(--accent);
+    text-decoration: none;
+  }
+
+  .toc-mobile { display: none; }
+  @media (max-width: 900px) {
+    .toc-mobile { display: block; margin-bottom: 32px; }
+    .toc-mobile summary {
+      cursor: pointer;
+      font-weight: 600;
+      padding: 12px 16px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      color: var(--ink);
+    }
+    .toc-mobile ol {
+      list-style: none;
+      margin: 8px 0 0;
+      padding: 12px 16px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .toc-mobile a { color: var(--ink-2); font-size: 0.92rem; }
+  }
+
+  /* ---------- hero ---------- */
+  .hero { margin-bottom: 44px; }
+  .hero-eyebrow {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--accent-ink);
+    background: var(--accent-soft);
+    border: 1px solid var(--accent-border);
+    padding: 4px 10px;
+    border-radius: 999px;
+    margin-bottom: 16px;
+  }
+  .hero h1 { font-size: clamp(1.7rem, 4vw, 2.3rem); margin: 0 0 12px; line-height: 1.3; }
+  .hero p.lede { font-size: 1.05rem; color: var(--ink-2); margin: 0 0 20px; max-width: 62ch; }
+  .hero-facts {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  .fact-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.85rem;
+    padding: 6px 12px;
+    border-radius: 999px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--ink-2);
+  }
+  .fact-pill b { color: var(--ink); font-weight: 600; }
+
+  /* ---------- sections ---------- */
+  section { margin-bottom: 52px; scroll-margin-top: 24px; }
+  .section-head { margin-bottom: 20px; }
+  .section-num {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 0.78rem;
+    color: var(--accent);
+    font-weight: 500;
+    display: block;
+    margin-bottom: 6px;
+  }
+  h2 { font-size: 1.5rem; margin: 0; }
+  h2 + p.sub { margin: 8px 0 0; color: var(--ink-2); max-width: 62ch; }
+  h3 { font-size: 1.08rem; margin: 28px 0 10px; }
+  p { margin: 0 0 14px; max-width: 68ch; }
+  ul, ol.plain { margin: 0 0 14px; padding-left: 22px; }
+  li { margin-bottom: 6px; }
+
+  /* ---------- screen cards ---------- */
+  .screen-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 14px;
+  }
+  .screen {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px 22px;
+    box-shadow: var(--shadow);
+  }
+  .screen-title {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 6px;
+  }
+  .screen-title strong { font-size: 1.02rem; color: var(--ink); }
+  .screen-path {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 0.8rem;
+    color: var(--accent-ink);
+    background: var(--accent-soft);
+    padding: 2px 8px;
+    border-radius: 6px;
+    white-space: nowrap;
+  }
+  .screen p { margin: 0; color: var(--ink-2); font-size: 0.95rem; }
+
+  /* mini mockups reused from the real app's own visual language */
+  .mock-row { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 14px; }
+  .mock-card {
+    flex: 1 1 160px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px 14px;
+    background: var(--bg);
+  }
+  .mock-label { font-size: 0.78rem; color: var(--muted); margin-bottom: 4px; }
+  .mock-value { font-size: 1.35rem; font-weight: 700; }
+  .mock-sub { font-size: 0.74rem; color: var(--muted); margin-top: 2px; }
+  .mock-example-tag {
+    font-size: 0.7rem;
+    color: var(--muted);
+    margin-top: 10px;
+    font-style: normal;
+  }
+  .pill {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 999px;
+  }
+  .pill-good { background: var(--good-soft); color: var(--good); border: 1px solid var(--good-border); }
+
+  /* ---------- steps ---------- */
+  ol.steps {
+    list-style: none;
+    margin: 0 0 18px;
+    padding: 0;
+    counter-reset: step;
+  }
+  ol.steps > li {
+    counter-increment: step;
+    position: relative;
+    padding: 2px 0 20px 44px;
+    border-left: 1px solid var(--border);
+    margin-left: 15px;
+  }
+  ol.steps > li:last-child { border-left-color: transparent; padding-bottom: 0; }
+  ol.steps > li::before {
+    content: counter(step);
+    position: absolute;
+    left: -15px;
+    top: 0;
+    width: 30px;
+    height: 30px;
+    border-radius: 999px;
+    background: var(--accent);
+    color: #fff;
+    font-family: "IBM Plex Mono", monospace;
+    font-weight: 600;
+    font-size: 0.85rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  ol.steps > li > strong { display: block; margin-bottom: 4px; color: var(--ink); }
+  ol.steps p { margin: 6px 0; }
+
+  /* ---------- code blocks ---------- */
+  pre {
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 16px;
+    overflow-x: auto;
+    margin: 10px 0 14px;
+    font-size: 0.86rem;
+    color: var(--code-ink);
+    line-height: 1.6;
+  }
+  code.inline {
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    padding: 1px 6px;
+    font-size: 0.88em;
+    color: var(--code-ink);
+  }
+
+  /* ---------- env table ---------- */
+  .table-wrap { overflow-x: auto; margin: 6px 0 20px; }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.9rem;
+    min-width: 560px;
+  }
+  th {
+    text-align: left;
+    font-size: 0.72rem;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--muted);
+    font-weight: 600;
+    padding: 0 12px 8px;
+    border-bottom: 1px solid var(--border-strong);
+  }
+  td {
+    padding: 12px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+    color: var(--ink-2);
+  }
+  td:first-child { white-space: nowrap; }
+  tr:last-child td { border-bottom: none; }
+
+  /* ---------- callouts ---------- */
+  .callout {
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 16px;
+    margin: 8px 0 18px;
+    font-size: 0.93rem;
+  }
+  .callout p:last-child { margin-bottom: 0; }
+  .callout-warn { background: var(--warn-soft); border-color: var(--warn-border); color: var(--warn); }
+  .callout-warn strong { color: var(--warn); }
+  .callout-info { background: var(--accent-soft); border-color: var(--accent-border); }
+  .callout-info strong { color: var(--accent-ink); }
+  .callout p { color: inherit; }
+
+  /* ---------- footer note ---------- */
+  .end-note {
+    margin-top: 60px;
+    padding-top: 20px;
+    border-top: 1px solid var(--border);
+    font-size: 0.85rem;
+    color: var(--muted);
+  }
+</style>
+</head>
+<body>
+
+
+<div class="shell">
+  <nav class="toc-desktop" aria-label="목차">
+    <p class="toc-eyebrow">목차</p>
+    <ol>
+      <li><a href="#screens">화면 둘러보기</a></li>
+      <li><a href="#install">처음 설치하기</a></li>
+      <li><a href="#env">환경변수 설명</a></li>
+      <li><a href="#openai">ChatGPT/Codex 연결</a></li>
+      <li><a href="#proxmox">Proxmox 연결</a></li>
+      <li><a href="#notes">알아두면 좋은 점</a></li>
+    </ol>
+  </nav>
+
+  <main>
+    <header class="hero">
+      <span class="hero-eyebrow">개인 서버용 대시보드 · 사용 설명서</span>
+      <h1>내 서버, 한 화면에서 확인하기</h1>
+      <p class="lede">
+        ChatGPT/Codex 사용량이 얼마나 남았는지, 우리 집 Proxmox 서버와 그 안의 VM들이 잘 돌고 있는지 —
+        일일이 로그인해서 확인하지 않고 여기서 한번에 봅니다.
+      </p>
+      <div class="hero-facts">
+        <span class="fact-pill">저장소 <b>eshir0/claude-app</b></span>
+        <span class="fact-pill">기본 주소 <b>localhost:3000</b></span>
+        <span class="fact-pill">Codex 사용량 <b>30분마다 자동 갱신</b></span>
+      </div>
+    </header>
+
+    <details class="toc-mobile">
+      <summary>목차 펼치기</summary>
+      <ol>
+        <li><a href="#screens">화면 둘러보기</a></li>
+        <li><a href="#install">처음 설치하기</a></li>
+        <li><a href="#env">환경변수 설명</a></li>
+        <li><a href="#openai">ChatGPT/Codex 연결</a></li>
+        <li><a href="#proxmox">Proxmox 연결</a></li>
+        <li><a href="#notes">알아두면 좋은 점</a></li>
+      </ol>
+    </details>
+
+    <section id="screens">
+      <div class="section-head">
+        <span class="section-num">화면</span>
+        <h2>화면 둘러보기</h2>
+        <p class="sub">로그인하면 이 다섯 화면을 오가며 씁니다.</p>
+      </div>
+
+      <div class="screen-grid">
+        <div class="screen">
+          <div class="screen-title"><strong>로그인</strong><span class="screen-path">/login</span></div>
+          <p>비밀번호 하나로 로그인합니다. 나 혼자 쓰는 대시보드라 계정을 여러 개 만들 필요가 없습니다.</p>
+        </div>
+
+        <div class="screen">
+          <div class="screen-title"><strong>홈</strong><span class="screen-path">/</span></div>
+          <p>로그인하면 바로 보이는 요약 화면. 각 섹션 오른쪽 위 새로고침(⟳)을 누르면 그 자리에서 즉시 최신 값을 가져옵니다.</p>
+          <div class="mock-row">
+            <div class="mock-card">
+              <div class="mock-label">Codex — 5시간 한도</div>
+              <div class="mock-value">100% 남음</div>
+              <div class="mock-sub">마지막 확인: 방금</div>
+            </div>
+            <div class="mock-card">
+              <div class="mock-label">Codex — 주간 한도</div>
+              <div class="mock-value">74% 남음</div>
+              <div class="mock-sub">마지막 확인: 방금</div>
+            </div>
+          </div>
+          <p class="mock-example-tag">위 카드는 실제 화면에서 나온 값을 예시로 재구성한 것입니다.</p>
+        </div>
+
+        <div class="screen">
+          <div class="screen-title"><strong>AI 사용량</strong><span class="screen-path">/ai-usage</span></div>
+          <p>카드·그래프·전체 기록 표로 사용량 변화를 봅니다. 값은 전부 자동 수집이며, 직접 타이핑해서 기록하는 기능은 없습니다 — 정확하지 않은 수기 입력보다 실제로 받아온 값만 신뢰하기로 했습니다.</p>
+        </div>
+
+        <div class="screen">
+          <div class="screen-title"><strong>자동 수집 연결</strong><span class="screen-path">/ai-usage/connections</span></div>
+          <p>ChatGPT 계정을 연결하는 곳. 한 번 연결해두면 서버가 30분마다 알아서 최신 사용량을 가져옵니다.</p>
+        </div>
+
+        <div class="screen">
+          <div class="screen-title"><strong>서버</strong><span class="screen-path">/server</span></div>
+          <p>Proxmox 호스트 상태와 VM/컨테이너 목록.</p>
+          <div class="mock-row">
+            <div class="mock-card">
+              <div class="mock-label">호스트: proxmox · CPU</div>
+              <div class="mock-value">0%</div>
+              <div class="mock-sub">32코어 · 메모리 5.0GB / 60.2GB</div>
+            </div>
+            <div class="mock-card">
+              <div class="mock-label">mk1 <span class="pill pill-good">running</span></div>
+              <div class="mock-value" style="font-size:1.05rem;">CPU 0%</div>
+              <div class="mock-sub">메모리 39MB / 8.0GB</div>
+            </div>
+          </div>
+          <p class="mock-example-tag">위 카드는 실제 화면에서 나온 값을 예시로 재구성한 것입니다.</p>
+        </div>
+      </div>
+    </section>
+
+    <section id="install">
+      <div class="section-head">
+        <span class="section-num">설치</span>
+        <h2>처음 설치하기</h2>
+        <p class="sub">필요한 것: Node.js 24 이상, 리눅스 서버 하나. 순서대로 따라오시면 됩니다.</p>
+      </div>
+
+      <ol class="steps">
+        <li>
+          <strong>저장소 받고 설치</strong>
+          <pre>git clone https://github.com/eshir0/claude-app.git
+cd claude-app
+npm install</pre>
+        </li>
+        <li>
+          <strong>환경변수 파일 만들기</strong>
+          <pre>cp .env.example .env</pre>
+          <p>그다음 아래 <a href="#env">환경변수 설명</a>을 보면서 <code class="inline">.env</code>를 채웁니다.</p>
+        </li>
+        <li>
+          <strong>로그인 비밀번호 만들기</strong>
+          <pre>npm run hash-password</pre>
+          <p>화면에서 비밀번호를 직접 입력하면(입력값은 화면에 안 보임) bcrypt 해시가 출력됩니다. 이 값을 <code class="inline">.env</code>의 <code class="inline">AUTH_PASSWORD_HASH</code>에 붙여넣으세요.</p>
+          <div class="callout callout-warn">
+            <p><strong>주의:</strong> <code class="inline">.env</code> 파일은 <code class="inline">$</code> 기호를 특별하게 해석합니다. bcrypt 해시는 <code class="inline">$2b$12$...</code>처럼 <code class="inline">$</code>가 여러 번 들어가므로 매번 앞에 역슬래시를 붙여야 합니다: <code class="inline">\$2b\$12\$...</code>. <code class="inline">npm run hash-password</code> 출력값은 이미 이렇게 되어 있으니 그대로 복사하면 됩니다.</p>
+          </div>
+        </li>
+        <li>
+          <strong>데이터베이스 준비</strong>
+          <pre>npx prisma migrate dev</pre>
+        </li>
+        <li>
+          <strong>실행</strong>
+          <pre>npm run dev
+# 또는 계속 켜둘 거라면
+npm run build && npm run start</pre>
+          <p>브라우저에서 <code class="inline">http://localhost:3000</code> (또는 <code class="inline">.env</code>의 <code class="inline">APP_ORIGIN</code>에 적은 주소)로 접속합니다.</p>
+        </li>
+      </ol>
+    </section>
+
+    <section id="env">
+      <div class="section-head">
+        <span class="section-num">설정</span>
+        <h2>환경변수 하나씩 설명</h2>
+        <p class="sub">전부 비밀 정보라 깃허브에 올라가면 안 되고(<code class="inline">.gitignore</code>가 이미 막아줍니다), 남에게 보여주면 안 됩니다.</p>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>변수</th><th>뭐 하는 값인가요</th><th>예시 / 만드는 법</th></tr>
+          </thead>
+          <tbody>
+            <tr><td><code class="inline">DATABASE_URL</code></td><td>데이터가 저장될 SQLite 파일 위치</td><td><code class="inline">file:./prisma/dev.db</code></td></tr>
+            <tr><td><code class="inline">AUTH_PASSWORD_HASH</code></td><td>로그인 비밀번호 (평문이 아니라 해시로)</td><td><code class="inline">npm run hash-password</code> 결과</td></tr>
+            <tr><td><code class="inline">SESSION_SECRET</code></td><td>로그인 상태를 안전하게 유지하는 임의값</td><td><code class="inline">node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"</code></td></tr>
+            <tr><td><code class="inline">CREDENTIAL_ENCRYPTION_KEY</code></td><td>ChatGPT 연결 정보를 암호화해 저장하는 키</td><td>위와 같은 명령으로 <em>다른 값</em> 생성</td></tr>
+            <tr><td><code class="inline">APP_ORIGIN</code></td><td>이 사이트에 실제로 접속하는 주소</td><td><code class="inline">http://localhost:3000</code> (여러 개면 쉼표로 구분)</td></tr>
+            <tr><td><code class="inline">PROXMOX_URL</code></td><td>Proxmox 웹 UI 주소</td><td><code class="inline">https://192.168.1.x:8006</code></td></tr>
+            <tr><td><code class="inline">PROXMOX_TOKEN_ID</code></td><td>Proxmox API 토큰 이름</td><td><code class="inline">root@pam!dashboard</code></td></tr>
+            <tr><td><code class="inline">PROXMOX_TOKEN_SECRET</code></td><td>Proxmox API 토큰 비밀값</td><td>토큰 만들 때 한 번만 표시됨</td></tr>
+            <tr><td><code class="inline">PROXMOX_SSL_FINGERPRINT</code></td><td>Proxmox 서버가 진짜인지 확인하는 지문값</td><td><a href="#proxmox">Proxmox 연결하기</a> 참고</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p><code class="inline">PROXMOX_*</code> 네 개는 서버 모니터링 기능에만 쓰입니다 — 안 채워도 앱은 정상 실행되고, "서버" 화면만 "연결 안 됨"으로 나옵니다.</p>
+    </section>
+
+    <section id="openai">
+      <div class="section-head">
+        <span class="section-num">연결 1</span>
+        <h2>ChatGPT/Codex 연결하기</h2>
+      </div>
+
+      <ol class="steps">
+        <li><strong>이동</strong><p>로그인 후 <code class="inline">/ai-usage/connections</code>로 이동</p></li>
+        <li><strong>연결하기 클릭</strong></li>
+        <li><strong>링크와 코드 확인</strong><p>화면에 링크와 한 번 쓰는 코드(예: <code class="inline">ZNLX-BJ8PO</code>)가 뜹니다.</p></li>
+        <li><strong>본인 기기에서 로그인</strong><p>휴대폰이나 PC 브라우저에서 그 링크를 열고 ChatGPT 계정으로 로그인한 뒤 코드를 입력합니다.</p></li>
+        <li><strong>자동 완료</strong><p>화면이 자동으로 "연결됨"으로 바뀝니다.</p></li>
+      </ol>
+
+      <div class="callout callout-info">
+        <p><strong>비밀번호나 쿠키를 직접 붙여넣지 않습니다.</strong> OpenAI의 공식 로그인 방식(기기 코드 로그인)을 그대로 쓰고, 로그인은 항상 본인 브라우저에서 이뤄집니다. 이 서버는 로그인 결과만 암호화해서 저장합니다.</p>
+      </div>
+
+      <div class="callout callout-warn">
+        <p><strong>Claude(Anthropic)는 왜 지원 안 하나요?</strong> Anthropic이 2026년 2월 약관을 바꿔서, Claude Pro/Max 구독 로그인 정보를 서드파티 서비스에서 쓰는 것을 공식 금지했습니다. 그래서 이 기능은 만들지 않았습니다.</p>
+      </div>
+    </section>
+
+    <section id="proxmox">
+      <div class="section-head">
+        <span class="section-num">연결 2</span>
+        <h2>Proxmox 연결하기</h2>
+        <p class="sub">Proxmox 웹 UI에 로그인한 상태에서 진행합니다.</p>
+      </div>
+
+      <ol class="steps">
+        <li><strong>Datacenter 클릭</strong><p>왼쪽 트리에서 <em>Datacenter</em>를 클릭합니다.</p></li>
+        <li><strong>API Tokens로 이동</strong><p><em>Permissions → API Tokens</em>를 클릭합니다.</p></li>
+        <li><strong>Add 클릭</strong></li>
+        <li>
+          <strong>토큰 정보 입력</strong>
+          <p><em>User</em>는 기존 계정 그대로(<code class="inline">root@pam</code> 등), <em>Token ID</em>는 원하는 이름(예: <code class="inline">dashboard</code>), <em>Privilege Separation</em>은 체크 해제합니다.</p>
+        </li>
+        <li>
+          <strong>Token ID / Secret 복사</strong>
+          <p><em>Add</em>를 누르면 뜨는 두 값을 복사해둡니다. <strong>Secret은 이 화면을 닫으면 다시 볼 수 없습니다.</strong></p>
+        </li>
+        <li>
+          <strong>서버 지문값 확인</strong>
+          <pre>curl -k https://&lt;Proxmox 주소&gt;:8006/api2/json/nodes</pre>
+          <p>결과에서 <code class="inline">ssl_fingerprint</code> 값을 복사합니다.</p>
+        </li>
+        <li>
+          <strong><code class="inline">.env</code>에 채우기</strong>
+          <pre>PROXMOX_URL=https://&lt;Proxmox 주소&gt;:8006
+PROXMOX_TOKEN_ID=&lt;4번의 User&gt;!&lt;4번의 Token ID&gt;
+PROXMOX_TOKEN_SECRET=&lt;5번의 Secret&gt;
+PROXMOX_SSL_FINGERPRINT=&lt;6번의 ssl_fingerprint&gt;</pre>
+        </li>
+      </ol>
+
+      <div class="callout callout-info">
+        <p>지문값을 등록해두는 이유는, 접속할 때마다 "지금 접속한 서버가 진짜 내 Proxmox가 맞는지" 확인하기 위해서입니다. Proxmox 인증서는 공인 기관 서명이 아니라 자체 서명이라, 지문을 고정해두지 않으면 중간에서 누군가 가로채도 알아챌 방법이 없습니다.</p>
+      </div>
+    </section>
+
+    <section id="notes">
+      <div class="section-head">
+        <span class="section-num">참고</span>
+        <h2>알아두면 좋은 점</h2>
+      </div>
+
+      <ul>
+        <li><strong>HTTPS가 아직 없습니다.</strong> 지금은 평문 HTTP입니다. 집 안(LAN)에서만 쓰면 크게 문제없지만, 공인 IP로 포트포워딩해서 인터넷에 열어두면 로그인 비밀번호와 세션이 암호화 없이 오갑니다. 계속 공개로 열어두실 거면 도메인을 마련해 HTTPS(리버스 프록시 + Let's Encrypt)를 붙이는 걸 권장합니다.</li>
+        <li><strong>재부팅하면 자동으로 다시 켜지지 않습니다.</strong> 지금은 사람이 직접 실행해야 합니다. 계속 켜두고 쓰실 거면 systemd 서비스 등록을 추천합니다.</li>
+        <li><strong>AI 사용량은 이력이 쌓이지만, 서버(Proxmox) 상태는 실시간 값만 보여주고 따로 저장하지 않습니다.</strong> Proxmox 자체가 이미 자기 이력을 갖고 있어서입니다.</li>
+      </ul>
+
+      <p class="end-note">더 기술적인 내용(검증 내역, 배포 방법)은 저장소의 <code class="inline">README.md</code>를 참고하세요.</p>
+    </section>
+  </main>
+</div>
+
+</body>
+</html>
