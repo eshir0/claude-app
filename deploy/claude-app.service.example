@@ -1,0 +1,39 @@
+# Template for a per-user systemd service (no root/sudo needed).
+#
+# Install:
+#   mkdir -p ~/.config/systemd/user
+#   cp deploy/claude-app.service.example ~/.config/systemd/user/claude-app.service
+#   # then edit the paths below for your own install location/user
+#   systemctl --user daemon-reload
+#   systemctl --user enable --now claude-app.service
+#   loginctl enable-linger $USER   # so it starts on boot, not just on login
+#
+# Logs: journalctl --user -u claude-app -f
+#
+# Why DATABASE_URL/CODEX_CLI_PATH are ABSOLUTE paths, not the relative ones
+# in .env: .next/standalone/server.js calls process.chdir(__dirname) as its
+# very first line, so the running process's cwd is always .next/standalone
+# — a relative path resolves against the wrong directory otherwise. See
+# scripts/sync-standalone-assets.sh's own comment and the project's gotchas
+# memory for the same issue found the hard way.
+
+[Unit]
+Description=Usage Dashboard (claude-app)
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/YOUR_USER/claude-app
+ExecStartPre=/home/YOUR_USER/claude-app/scripts/sync-standalone-assets.sh
+ExecStart=/usr/bin/node /home/YOUR_USER/claude-app/.next/standalone/server.js
+Restart=on-failure
+RestartSec=5
+
+Environment=NODE_ENV=production
+Environment=PORT=3000
+Environment=HOSTNAME=0.0.0.0
+Environment=DATABASE_URL=file:/home/YOUR_USER/claude-app/prisma/dev.db
+Environment=CODEX_CLI_PATH=/home/YOUR_USER/claude-app/node_modules/.bin/codex
+
+[Install]
+WantedBy=default.target

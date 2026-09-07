@@ -19,6 +19,7 @@
 - [ChatGPT/Codex 연결하기](#chatgptcodex-연결하기)
 - [Proxmox 연결하기](#proxmox-연결하기)
 - [온도 모니터링 설정하기 (선택)](#온도-모니터링-설정하기-선택)
+- [systemd로 자동 실행 설정하기 (선택)](#systemd로-자동-실행-설정하기-선택)
 - [알아두면 좋은 점](#알아두면-좋은-점)
 
 ---
@@ -200,8 +201,41 @@ Proxmox의 API 자체에는 온도 정보가 아예 없습니다. 그래서 이 
 
 ---
 
+## systemd로 자동 실행 설정하기 (선택)
+
+이걸 해두면 **서버(또는 이 앱이 돌아가는 컨테이너)가 재부팅돼도 사람이 따로 실행할 필요 없이 알아서 다시 켜집니다**. root 권한 없이, 내 계정 권한만으로 등록하는 방식입니다.
+
+1. **서비스 파일 만들기** (`npm run build`까지 끝낸 상태에서)
+   ```bash
+   mkdir -p ~/.config/systemd/user
+   cp deploy/claude-app.service.example ~/.config/systemd/user/claude-app.service
+   ```
+   복사한 파일을 열어 `/home/YOUR_USER/claude-app` 부분을 실제 설치 경로로 바꿉니다.
+
+2. **등록하고 지금 바로 시작**
+   ```bash
+   systemctl --user daemon-reload
+   systemctl --user enable --now claude-app.service
+   ```
+
+3. **재부팅 후에도 시작되게 linger 켜기** (여기가 유일하게 sudo가 필요한 부분)
+   ```bash
+   sudo loginctl enable-linger $USER
+   ```
+   `linger`를 안 켜두면, 컨테이너/서버가 재부팅됐을 때 **누군가 로그인하기 전까지는** 서비스가 안 뜹니다 — linger를 켜야 로그인 여부와 상관없이 부팅과 동시에 뜹니다.
+
+4. **확인**
+   ```bash
+   systemctl --user status claude-app.service
+   journalctl --user -u claude-app -f   # 로그 실시간으로 보기
+   ```
+
+이후 코드를 바꿔서 다시 빌드했다면 `systemctl --user restart claude-app.service`로 재시작하면 됩니다(정적 파일 동기화는 서비스 시작 시 자동으로 함께 실행됩니다).
+
+---
+
 ## 알아두면 좋은 점
 
 - **HTTPS가 아직 없습니다.** 지금은 평문 HTTP입니다. 집 안(LAN)에서만 쓰면 크게 문제없지만, 공인 IP로 포트포워딩해서 인터넷에 열어두는 경우 로그인 비밀번호와 세션이 암호화 없이 오갑니다. 계속 공개로 열어두실 거면 도메인을 하나 마련해서 HTTPS(리버스 프록시 + Let's Encrypt)를 붙이는 걸 권장합니다.
-- **재부팅하면 자동으로 다시 켜지지 않습니다.** 지금은 사람이 직접 실행해야 합니다. 계속 켜두고 쓰실 거면 systemd 서비스 등록을 추천합니다.
+- **재부팅해도 자동으로 다시 켜집니다** — [systemd로 자동 실행 설정하기](#systemd로-자동-실행-설정하기-선택)를 해뒀다면요. 안 해뒀다면 사람이 직접 실행해야 합니다.
 - **AI 사용량 기록은 이력이 DB에 쌓이지만, 서버(Proxmox) 상태는 실시간 값만 보여주고 따로 저장하지 않습니다.** Proxmox 자체가 이미 자기 이력을 갖고 있어서입니다.
