@@ -19,6 +19,11 @@ export interface ProxmoxGuestStatus {
   memUsed: number;
   memTotal: number;
   uptimeSeconds: number;
+  /** Cumulative bytes since the guest last started — a running total, not
+   * a rate. A rate (bytes/sec) is computed client-side by diffing two
+   * snapshots over time — see ServerView.tsx. */
+  netInBytes: number;
+  netOutBytes: number;
 }
 
 /** A Datacenter-level storage pool (e.g. "local-lvm") — where VM/container
@@ -35,4 +40,7 @@ export interface ProxmoxOverview {
   nodes: ProxmoxNodeStatus[];
   guests: ProxmoxGuestStatus[];
   storages: ProxmoxStoragePool[];
+  /** null when PROXMOX_SSH_HOST/PROXMOX_SSH_KEY_PATH aren't configured, or
+   * the SSH read failed this time — never fabricated. */
+  sensors: { cpuTempC: number | null; gpuTempC: number | null; nvmeTempC: number | null } | null;
 }

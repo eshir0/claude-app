@@ -1,5 +1,6 @@
 import "server-only";
 import { proxmoxRequest } from "./client";
+import { isSensorsConfigured, fetchSensorReadings } from "./sensors";
 import type { ProxmoxNodeStatus, ProxmoxGuestStatus, ProxmoxStoragePool, ProxmoxOverview } from "./types";
 
 // Raw shapes below match fields actually observed from a live Proxmox VE
@@ -28,6 +29,8 @@ interface RawGuest {
   mem: number;
   maxmem: number;
   uptime: number;
+  netin: number;
+  netout: number;
 }
 
 interface RawStorage {
@@ -49,6 +52,9 @@ function mapGuest(g: RawGuest, type: "qemu" | "lxc"): ProxmoxGuestStatus {
     memUsed: g.mem,
     memTotal: g.maxmem,
     uptimeSeconds: g.uptime,
+    // A stopped guest doesn't report these — default to 0 rather than NaN.
+    netInBytes: g.netin ?? 0,
+    netOutBytes: g.netout ?? 0,
   };
 }
 
@@ -106,5 +112,17 @@ export async function getProxmoxOverview(): Promise<ProxmoxOverview> {
     }
   }
 
-  return { nodes, guests, storages: [...storageByName.values()] };
+  // Best-effort, independent of the Proxmox API path entirely (different
+  // credentials, different transport) — a temperature-read failure must
+  // never take down the rest of the overview.
+  let sensors: ProxmoxOverview["sensors"] = null;
+  if (isSensorsConfigured()) {
+    try {
+      sensors = await fetchSensorReadings();
+    } catch {
+      sensors = null;
+    }
+  }
+
+  return { nodes, guests, storages: [...storageByName.values()], sensors };
 }

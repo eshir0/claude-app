@@ -1,6 +1,6 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-import { formatBytes, formatPercent, formatUptime } from "./format.ts";
+import { formatBytes, formatPercent, formatUptime, usageLevelClass, tempLevelClass } from "./format.ts";
 
 describe("formatBytes", () => {
   test("shows MB below 1 GB", () => {
@@ -25,6 +25,34 @@ describe("formatPercent", () => {
     assert.equal(formatPercent(0.361), "36%");
     assert.equal(formatPercent(0), "0%");
     assert.equal(formatPercent(1), "100%");
+  });
+});
+
+describe("usageLevelClass", () => {
+  test("no color below 75%", () => {
+    assert.equal(usageLevelClass(0.74), "");
+  });
+  test("amber from 75% up to (not including) 90%", () => {
+    assert.equal(usageLevelClass(0.75), "text-amber-600 dark:text-amber-400");
+    assert.equal(usageLevelClass(0.89), "text-amber-600 dark:text-amber-400");
+  });
+  test("red at/above 90%", () => {
+    assert.equal(usageLevelClass(0.9), "text-red-600 dark:text-red-400");
+    assert.equal(usageLevelClass(1), "text-red-600 dark:text-red-400");
+  });
+});
+
+describe("tempLevelClass", () => {
+  test("no color below 80°C", () => {
+    assert.equal(tempLevelClass(79), "");
+  });
+  test("amber from 80°C up to (not including) 90°C", () => {
+    assert.equal(tempLevelClass(80), "text-amber-600 dark:text-amber-400");
+    assert.equal(tempLevelClass(89), "text-amber-600 dark:text-amber-400");
+  });
+  test("red at/above 90°C", () => {
+    assert.equal(tempLevelClass(90), "text-red-600 dark:text-red-400");
+    assert.equal(tempLevelClass(100), "text-red-600 dark:text-red-400");
   });
 });
 
