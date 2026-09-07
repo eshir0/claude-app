@@ -1,9 +1,12 @@
 # 사용량 대시보드
 
+> 📘 사용법·설치 방법을 쉽게 정리한 안내서: **https://eshir0.github.io/claude-app/** (또는 `GUIDE.md`)
+
 개인 서버에 배포하는 자체 호스팅 대시보드. 확장 가능한 베이스 위에, 첫 모듈로 ChatGPT
-Codex 구독 사용량을 추적한다. `/ai-usage/connections`에서 Codex CLI의 공식 기기 코드
-(device code) 로그인으로 본인 ChatGPT 계정에 연결하면 실시간 수집이 가능하고, 수동 기록도
-계속 지원한다(폼으로 값을 직접 입력).
+Codex 구독 사용량을 추적하고, 두 번째 모듈로 Proxmox VE 서버(호스트/스토리지/VM·컨테이너)
+상태를 보여준다. `/ai-usage/connections`에서 Codex CLI의 공식 기기 코드(device code)
+로그인으로 본인 ChatGPT 계정에 연결하면 서버가 30분마다 자동으로 수집한다 — 수동 입력
+기능은 없다(정확성이 보장되지 않는 수기 입력 대신, 실제로 수집된 값만 신뢰하기로 함).
 
 Claude Pro는 추적하지 않는다 — Anthropic이 2026-02 Consumer Terms of Service 개정으로
 Free/Pro/Max 구독 OAuth 토큰을 Claude Code/claude.ai가 아닌 제3의 도구에서 쓰는 것을
