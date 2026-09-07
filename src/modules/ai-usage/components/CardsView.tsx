@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { RefreshCw } from "lucide-react";
 import { USAGE_METRICS } from "../metrics";
-import { usedToRemainingPercent } from "../logic";
+import { usedToRemainingPercent, formatResetCountdown } from "../logic";
 import type { CardStatesResponse, UsageCardState } from "../types";
 
 const REFRESH_INTERVAL_MS = 5 * 60 * 1000;
@@ -148,6 +148,11 @@ function renderBody(state: UsageCardState | undefined) {
       <div className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
         마지막 확인: {observedAt} {badge}
       </div>
+      {state.entry.resetsAt && (
+        <div className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
+          리셋: {new Date(state.entry.resetsAt).toLocaleString()} ({formatResetCountdown(state.entry.resetsAt)})
+        </div>
+      )}
     </div>
   );
 }

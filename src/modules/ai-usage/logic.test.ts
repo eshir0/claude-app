@@ -6,6 +6,7 @@ import {
   computeCardState,
   compareEntriesNewestFirst,
   usedToRemainingPercent,
+  formatResetCountdown,
 } from "./logic.ts";
 import type { AiUsageEntryDTO } from "./types.ts";
 
@@ -176,6 +177,24 @@ describe("usedToRemainingPercent", () => {
     assert.equal(usedToRemainingPercent(20), 80);
     assert.equal(usedToRemainingPercent(0), 100);
     assert.equal(usedToRemainingPercent(100), 0);
+  });
+});
+
+describe("formatResetCountdown", () => {
+  const now = new Date("2026-09-07T12:00:00Z");
+
+  test("minutes only under an hour away", () => {
+    assert.equal(formatResetCountdown("2026-09-07T12:45:00Z", now), "45분 후 초기화");
+  });
+  test("hours and minutes under a day away", () => {
+    assert.equal(formatResetCountdown("2026-09-07T15:20:00Z", now), "3시간 20분 후 초기화");
+  });
+  test("days and hours at/above a day away", () => {
+    assert.equal(formatResetCountdown("2026-09-09T16:00:00Z", now), "2일 4시간 후 초기화");
+  });
+  test("already past resetsAt", () => {
+    assert.equal(formatResetCountdown("2026-09-07T11:00:00Z", now), "초기화 시각 지남");
+    assert.equal(formatResetCountdown("2026-09-07T12:00:00Z", now), "초기화 시각 지남");
   });
 });
 

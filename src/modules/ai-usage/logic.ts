@@ -76,6 +76,25 @@ export function usedToRemainingPercent(usedPercent: number): number {
   return 100 - usedPercent;
 }
 
+/**
+ * "N시간 M분 후 초기화" style countdown to a known resetsAt — `now` is
+ * injectable for deterministic tests. Never fabricates a reset time itself;
+ * only formats one that was actually recorded (see AiUsageEntry.resetsAt).
+ */
+export function formatResetCountdown(resetsAtIso: string, now: Date = new Date()): string {
+  const diffMs = new Date(resetsAtIso).getTime() - now.getTime();
+  if (diffMs <= 0) return "초기화 시각 지남";
+
+  const totalMinutes = Math.floor(diffMs / 60_000);
+  const days = Math.floor(totalMinutes / 1440);
+  const hours = Math.floor((totalMinutes % 1440) / 60);
+  const minutes = totalMinutes % 60;
+
+  if (days > 0) return `${days}일 ${hours}시간 후 초기화`;
+  if (hours > 0) return `${hours}시간 ${minutes}분 후 초기화`;
+  return `${minutes}분 후 초기화`;
+}
+
 const optionalTrimmedString = z.preprocess(toUndefinedIfEmpty, z.string().optional());
 
 export const listEntriesQuerySchema = z
