@@ -18,6 +18,13 @@ import { spawn } from "node:child_process";
 
 export interface ProxmoxSensorReadings {
   cpuTempC: number | null;
+  /** `amdgpu-pci*` is real hardware, not a stray/misattributed reading —
+   * confirmed: every non-"G" desktop Ryzen since the 7000 series ships a
+   * small built-in RDNA2 display-output GPU (2 CU) even with no discrete
+   * card installed, and Proxmox's amdgpu driver picks it up like any other
+   * GPU. So this can be non-null on a machine with "no GPU" in the
+   * ordinary sense — it's the CPU's own graphics engine, not a phantom
+   * discrete card. */
   gpuTempC: number | null;
   nvmeTempC: number | null;
 }

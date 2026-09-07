@@ -160,7 +160,9 @@ export default function ServerView({ configured, initialOverview, initialError }
                   )}
                   {overview.sensors?.gpuTempC != null && (
                     <>
-                      <dt className="text-zinc-500">GPU 온도</dt>
+                      <dt className="text-zinc-500" title="별도 그래픽카드가 아니라 CPU에 내장된 디스플레이 출력용 그래픽 엔진입니다.">
+                        내장 GPU 온도
+                      </dt>
                       <dd className={`text-right tabular-nums ${tempLevelClass(overview.sensors.gpuTempC)}`}>
                         {overview.sensors.gpuTempC.toFixed(1)}°C
                       </dd>

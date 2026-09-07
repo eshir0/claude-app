@@ -496,6 +496,9 @@
         <div class="screen">
           <div class="screen-title"><strong>서버</strong><span class="screen-path">/server</span></div>
           <p>Proxmox 호스트 상태(CPU·메모리·디스크·온도), 데이터센터 스토리지, VM/컨테이너별 CPU·메모리·디스크·네트워크 속도. 저장공간은 75%부터 주황, 90%부터 빨간색으로 표시됩니다.</p>
+          <div class="callout callout-info" style="margin-top:10px;">
+            <p><strong>그래픽카드가 없는데 "내장 GPU 온도"가 나와요?</strong> 오작동이 아닙니다 — "G"가 안 붙은 일반 데스크톱 Ryzen(7000 시리즈 이후)도 화면 출력·문제진단용 아주 작은 내장 그래픽(2 CU RDNA2)이 기본 탑재돼 있어서, 별도 그래픽카드 없이도 이 값이 잡힙니다.</p>
+          </div>
           <div class="mock-row">
             <div class="mock-card">
               <div class="mock-label">호스트: proxmox · CPU</div>
