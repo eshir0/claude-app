@@ -227,6 +227,7 @@ export default function ServerView({ configured, initialOverview, initialError }
                   <th className="px-3 py-2 font-medium">상태</th>
                   <th className="px-3 py-2 font-medium">CPU</th>
                   <th className="px-3 py-2 font-medium">메모리</th>
+                  <th className="px-3 py-2 font-medium">디스크</th>
                   <th className="px-3 py-2 font-medium">네트워크</th>
                   <th className="px-3 py-2 font-medium">가동 시간</th>
                 </tr>
@@ -234,7 +235,7 @@ export default function ServerView({ configured, initialOverview, initialError }
               <tbody>
                 {overview.guests.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="px-3 py-4 text-center text-zinc-500">
+                    <td colSpan={8} className="px-3 py-4 text-center text-zinc-500">
                       VM/컨테이너가 없습니다
                     </td>
                   </tr>
@@ -261,6 +262,17 @@ export default function ServerView({ configured, initialOverview, initialError }
                         </td>
                         <td className="px-3 py-2 tabular-nums">
                           {g.status === "running" ? `${formatBytes(g.memUsed)} / ${formatBytes(g.memTotal)}` : "—"}
+                        </td>
+                        <td
+                          className={`px-3 py-2 tabular-nums ${usageLevelClass(g.diskTotal > 0 ? g.diskUsed / g.diskTotal : 0)}`}
+                        >
+                          {g.diskTotal > 0 ? (
+                            <>
+                              {formatBytes(g.diskUsed)} / {formatBytes(g.diskTotal)}
+                            </>
+                          ) : (
+                            "—"
+                          )}
                         </td>
                         <td className="px-3 py-2 tabular-nums whitespace-nowrap">
                           {g.status !== "running" ? "—" : rate ? (

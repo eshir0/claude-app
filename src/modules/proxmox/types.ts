@@ -24,6 +24,13 @@ export interface ProxmoxGuestStatus {
    * snapshots over time — see ServerView.tsx. */
   netInBytes: number;
   netOutBytes: number;
+  /** LXC containers report real disk usage. QEMU VMs typically report 0
+   * here (the hypervisor can't see inside a virtual disk's filesystem
+   * without a guest agent) even though diskTotal is a real provisioned
+   * size — shown as-is rather than hidden, so a "VM 0GB used" isn't
+   * mistaken for a bug. */
+  diskUsed: number;
+  diskTotal: number;
 }
 
 /** A Datacenter-level storage pool (e.g. "local-lvm") — where VM/container
