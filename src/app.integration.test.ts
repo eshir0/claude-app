@@ -10,12 +10,24 @@
 // Needs a real AUTH_PASSWORD_HASH/SESSION_SECRET/APP_ORIGIN configured on
 // that server, and TEST_PASSWORD set to the plaintext password matching
 // that hash (never the hash itself — this only needs what a real login
-// form would submit).
+// form would submit). Also needs DATABASE_URL set in THIS process's own
+// env (matching the server's) — there is no public create endpoint any
+// more (entries only ever come from the OpenAI/Codex collector), so this
+// test seeds/cleans up AiUsageEntry rows via a direct Prisma connection to
+// the same database instead of going through HTTP.
 import test from "node:test";
 import assert from "node:assert/strict";
+import { PrismaClient } from "./generated/prisma/client.js";
+import { PrismaBetterSqlite3 } from "@prisma/adapter-better-sqlite3";
 
 const BASE_URL = process.env.BASE_URL ?? "http://localhost:3000";
 const TEST_PASSWORD = process.env.TEST_PASSWORD;
+
+function testPrisma(): PrismaClient | null {
+  const databaseUrl = process.env.DATABASE_URL;
+  if (!databaseUrl) return null;
+  return new PrismaClient({ adapter: new PrismaBetterSqlite3({ url: databaseUrl }) });
+}
 
 function extractCookie(res: Response): string | null {
   const raw = res.headers.get("set-cookie");
@@ -35,7 +47,11 @@ async function login(): Promise<string> {
   return cookie!;
 }
 
-test("integration suite", { skip: !TEST_PASSWORD && "set TEST_PASSWORD to run integration tests against a live server" }, async (t) => {
+test("integration suite", {
+  skip:
+    (!TEST_PASSWORD && "set TEST_PASSWORD to run integration tests against a live server") ||
+    (!process.env.DATABASE_URL && "set DATABASE_URL (matching the server's) to seed test data directly"),
+}, async (t) => {
   await t.test("unauthenticated API access is rejected with 401 JSON, not an HTML redirect", async () => {
     const res = await fetch(`${BASE_URL}/api/ai-usage/cards`);
     assert.equal(res.status, 401);
@@ -83,79 +99,49 @@ test("integration suite", { skip: !TEST_PASSWORD && "set TEST_PASSWORD to run in
     assert.equal(res.status, 401);
   });
 
-  await t.test("full authenticated flow: login, create, latest-record selection, delete", async () => {
+  await t.test("full authenticated flow: login, latest-record selection, delete", async () => {
+    const prisma = testPrisma();
+    assert.ok(prisma, "DATABASE_URL must be set for this test");
+
     const cookie = await login();
-    const authHeaders = { Cookie: cookie, Origin: BASE_URL, "Content-Type": "application/json" };
 
     // Authenticated home page now loads.
     const home = await fetch(`${BASE_URL}/`, { headers: { Cookie: cookie } });
     assert.equal(home.status, 200);
 
     // This test asserts on WHICH entry ends up "latest", so it needs a known
-    // starting state — wipe any pre-existing claude_pro_5h_window rows first.
-    // Without this, leftover rows from a previous manual test session (or a
+    // starting state — wipe any pre-existing chatgpt_codex_5h_window rows
+    // first. Without this, leftover rows from a previous test run (or a
     // concurrent one, since this dev database is a shared local file) make
     // the "fallback lands on exactly this id" assertions flaky for reasons
     // that have nothing to do with the behavior under test.
-    const preexisting = await (
-      await fetch(`${BASE_URL}/api/ai-usage?metricId=claude_pro_5h_window&limit=100`, {
-        headers: { Cookie: cookie },
-      })
-    ).json();
-    for (const row of preexisting.items) {
-      await fetch(`${BASE_URL}/api/ai-usage/${row.id}`, {
-        method: "DELETE",
-        headers: { Cookie: cookie, Origin: BASE_URL },
-      });
-    }
+    await prisma.aiUsageEntry.deleteMany({ where: { metricId: "chatgpt_codex_5h_window" } });
 
-    // Reject invalid input (range, not silently coerced).
-    const bad = await fetch(`${BASE_URL}/api/ai-usage`, {
-      method: "POST",
-      headers: authHeaders,
-      body: JSON.stringify({
-        metricId: "claude_pro_5h_window",
-        usagePercent: 150,
-        recordedAt: new Date().toISOString(),
-      }),
-    });
-    assert.equal(bad.status, 400);
-
-    // Create a "true latest" entry.
-    const latestRes = await fetch(`${BASE_URL}/api/ai-usage`, {
-      method: "POST",
-      headers: authHeaders,
-      body: JSON.stringify({
-        metricId: "claude_pro_5h_window",
+    // Seed directly via Prisma — there is no public create endpoint any
+    // more (only the collector creates entries, always source: "AUTO").
+    const latest = await prisma.aiUsageEntry.create({
+      data: {
+        metricId: "chatgpt_codex_5h_window",
         usagePercent: 77,
-        recordedAt: new Date().toISOString(),
-      }),
-    });
-    assert.equal(latestRes.status, 201);
-    const latest = await latestRes.json();
-
-    // A backdated entry, inserted AFTER, with a client-supplied source:"AUTO"
-    // that must be ignored.
-    const backdatedRes = await fetch(`${BASE_URL}/api/ai-usage`, {
-      method: "POST",
-      headers: authHeaders,
-      body: JSON.stringify({
-        metricId: "claude_pro_5h_window",
-        usagePercent: 5,
-        recordedAt: "2020-06-01T00:00:00Z",
+        recordedAt: new Date(),
         source: "AUTO",
-      }),
+      },
     });
-    assert.equal(backdatedRes.status, 201);
-    const backdated = await backdatedRes.json();
-    assert.equal(backdated.source, "MANUAL", "client-supplied source must be ignored server-side");
+    const backdated = await prisma.aiUsageEntry.create({
+      data: {
+        metricId: "chatgpt_codex_5h_window",
+        usagePercent: 5,
+        recordedAt: new Date("2020-06-01T00:00:00Z"),
+        source: "AUTO",
+      },
+    });
 
     // The card must still reflect the true latest (by recordedAt), not the
     // most recently inserted row.
     const cardsRes = await fetch(`${BASE_URL}/api/ai-usage/cards`, { headers: { Cookie: cookie } });
     const cards = await cardsRes.json();
-    assert.equal(cards.claude_pro_5h_window.kind, "OK");
-    assert.equal(cards.claude_pro_5h_window.entry.id, latest.id);
+    assert.equal(cards.chatgpt_codex_5h_window.kind, "OK");
+    assert.equal(cards.chatgpt_codex_5h_window.entry.id, latest.id);
 
     // Delete the latest; the card must fall back to the next-latest entry,
     // not disappear or reset to 0.
@@ -168,7 +154,7 @@ test("integration suite", { skip: !TEST_PASSWORD && "set TEST_PASSWORD to run in
     const cardsAfterDelete = await (
       await fetch(`${BASE_URL}/api/ai-usage/cards`, { headers: { Cookie: cookie } })
     ).json();
-    assert.equal(cardsAfterDelete.claude_pro_5h_window.entry.id, backdated.id);
+    assert.equal(cardsAfterDelete.chatgpt_codex_5h_window.entry.id, backdated.id);
 
     // Cross-origin DELETE is rejected even with a valid session cookie.
     const csrfDel = await fetch(`${BASE_URL}/api/ai-usage/${backdated.id}`, {
@@ -198,5 +184,7 @@ test("integration suite", { skip: !TEST_PASSWORD && "set TEST_PASSWORD to run in
     const clearedCookie = extractCookie(logoutRes);
     assert.equal(clearedCookie, "claude-app-session=", "logout must clear the cookie value");
     assert.match(logoutRes.headers.get("set-cookie") ?? "", /Max-Age=0/i);
+
+    await prisma.$disconnect();
   });
 });

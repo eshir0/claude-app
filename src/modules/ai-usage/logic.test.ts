@@ -5,7 +5,7 @@ import {
   listEntriesQuerySchema,
   computeCardState,
   compareEntriesNewestFirst,
-  remainingToUsedPercent,
+  usedToRemainingPercent,
 } from "./logic.ts";
 import type { AiUsageEntryDTO } from "./types.ts";
 
@@ -19,7 +19,7 @@ const SAFE_PAST_ISO = () => new Date(Date.now() - 60 * 1000).toISOString();
 function entry(overrides: Partial<AiUsageEntryDTO> = {}): AiUsageEntryDTO {
   return {
     id: "e1",
-    metricId: "claude_pro_5h_window",
+    metricId: "chatgpt_codex_5h_window",
     usagePercent: 50,
     note: null,
     source: "MANUAL",
@@ -40,23 +40,14 @@ describe("createEntrySchema", () => {
     assert.equal(r.success, false);
   });
 
-  test("rejects a placeholder (non-numeric) metric", () => {
-    const r = createEntrySchema.safeParse({
-      metricId: "chatgpt_plus_general",
-      usagePercent: 50,
-      recordedAt: SAFE_PAST_ISO(),
-    });
-    assert.equal(r.success, false);
-  });
-
   test("rejects usagePercent out of range", () => {
     const bad1 = createEntrySchema.safeParse({
-      metricId: "claude_pro_5h_window",
+      metricId: "chatgpt_codex_5h_window",
       usagePercent: 101,
       recordedAt: SAFE_PAST_ISO(),
     });
     const bad2 = createEntrySchema.safeParse({
-      metricId: "claude_pro_5h_window",
+      metricId: "chatgpt_codex_5h_window",
       usagePercent: -1,
       recordedAt: SAFE_PAST_ISO(),
     });
@@ -66,7 +57,7 @@ describe("createEntrySchema", () => {
 
   test("rejects empty/missing usagePercent (does not coerce to 0)", () => {
     const r = createEntrySchema.safeParse({
-      metricId: "claude_pro_5h_window",
+      metricId: "chatgpt_codex_5h_window",
       usagePercent: "" as unknown as number,
       recordedAt: SAFE_PAST_ISO(),
     });
@@ -75,7 +66,7 @@ describe("createEntrySchema", () => {
 
   test("rejects a date string with no timezone offset", () => {
     const r = createEntrySchema.safeParse({
-      metricId: "claude_pro_5h_window",
+      metricId: "chatgpt_codex_5h_window",
       usagePercent: 50,
       recordedAt: "2026-09-06T10:00:00",
     });
@@ -85,7 +76,7 @@ describe("createEntrySchema", () => {
   test("rejects recordedAt more than 5 minutes in the future", () => {
     const future = new Date(Date.now() + 60 * 60 * 1000).toISOString();
     const r = createEntrySchema.safeParse({
-      metricId: "claude_pro_5h_window",
+      metricId: "chatgpt_codex_5h_window",
       usagePercent: 50,
       recordedAt: future,
     });
@@ -100,7 +91,7 @@ describe("createEntrySchema", () => {
     const recordedAt = new Date(Date.now() - 60 * 1000);
     const resetsAt = new Date(recordedAt.getTime() + 5 * 60 * 60 * 1000);
     const r = createEntrySchema.safeParse({
-      metricId: "claude_pro_5h_window",
+      metricId: "chatgpt_codex_5h_window",
       usagePercent: 50,
       recordedAt: recordedAt.toISOString(),
       resetsAt: resetsAt.toISOString(),
@@ -110,7 +101,7 @@ describe("createEntrySchema", () => {
 
   test("allows a past recordedAt with a resetsAt also in the past (backfilled record)", () => {
     const r = createEntrySchema.safeParse({
-      metricId: "claude_pro_5h_window",
+      metricId: "chatgpt_codex_5h_window",
       usagePercent: 50,
       recordedAt: "2020-06-01T10:00:00Z",
       resetsAt: "2020-06-01T15:00:00Z",
@@ -122,7 +113,7 @@ describe("createEntrySchema", () => {
     const recordedAt = new Date(Date.now() - 60 * 1000);
     const resetsAt = new Date(recordedAt.getTime() - 60 * 60 * 1000);
     const r = createEntrySchema.safeParse({
-      metricId: "claude_pro_5h_window",
+      metricId: "chatgpt_codex_5h_window",
       usagePercent: 50,
       recordedAt: recordedAt.toISOString(),
       resetsAt: resetsAt.toISOString(),
@@ -132,7 +123,7 @@ describe("createEntrySchema", () => {
 
   test("allows omitted resetsAt and note, stores as undefined not empty-string", () => {
     const r = createEntrySchema.safeParse({
-      metricId: "claude_pro_5h_window",
+      metricId: "chatgpt_codex_5h_window",
       usagePercent: 50,
       recordedAt: new Date(Date.now() - 60 * 1000).toISOString(),
       resetsAt: "",
@@ -147,7 +138,7 @@ describe("createEntrySchema", () => {
 
   test("rejects note over 500 chars", () => {
     const r = createEntrySchema.safeParse({
-      metricId: "claude_pro_5h_window",
+      metricId: "chatgpt_codex_5h_window",
       usagePercent: 50,
       recordedAt: SAFE_PAST_ISO(),
       note: "a".repeat(501),
@@ -180,11 +171,11 @@ describe("listEntriesQuerySchema", () => {
   });
 });
 
-describe("remainingToUsedPercent", () => {
-  test("converts remaining % to used %", () => {
-    assert.equal(remainingToUsedPercent(80), 20);
-    assert.equal(remainingToUsedPercent(0), 100);
-    assert.equal(remainingToUsedPercent(100), 0);
+describe("usedToRemainingPercent", () => {
+  test("converts used % to remaining %", () => {
+    assert.equal(usedToRemainingPercent(20), 80);
+    assert.equal(usedToRemainingPercent(0), 100);
+    assert.equal(usedToRemainingPercent(100), 0);
   });
 });
 
@@ -218,13 +209,13 @@ describe("computeCardState", () => {
   });
 
   test("NO_DATA when there are zero entries for a supported metric", () => {
-    const state = computeCardState("claude_pro_5h_window", [], now);
+    const state = computeCardState("chatgpt_codex_5h_window", [], now);
     assert.equal(state.kind, "NO_DATA");
   });
 
   test("OK for a recent entry with no resetsAt", () => {
     const e = entry({ recordedAt: "2026-09-06T11:00:00Z" });
-    const state = computeCardState("claude_pro_5h_window", [e], now);
+    const state = computeCardState("chatgpt_codex_5h_window", [e], now);
     assert.equal(state.kind, "OK");
   });
 
@@ -234,14 +225,14 @@ describe("computeCardState", () => {
       recordedAt: "2026-08-01T00:00:00Z",
       resetsAt: "2026-08-01T05:00:00Z",
     });
-    const state = computeCardState("claude_pro_5h_window", [e], now);
+    const state = computeCardState("chatgpt_codex_5h_window", [e], now);
     assert.equal(state.kind, "PERIOD_ENDED");
   });
 
   test("STALE when recordedAt is older than the metric's threshold and resetsAt is unknown", () => {
     // fixed_window, windowHours=5 -> stale threshold = 10h. 40h old triggers it.
     const e = entry({ recordedAt: "2026-09-04T20:00:00Z", resetsAt: null });
-    const state = computeCardState("claude_pro_5h_window", [e], now);
+    const state = computeCardState("chatgpt_codex_5h_window", [e], now);
     assert.equal(state.kind, "STALE");
   });
 
@@ -250,7 +241,7 @@ describe("computeCardState", () => {
     const olderAddedLater = entry({ id: "older", recordedAt: "2026-09-01T00:00:00Z" });
     // Simulate service.ts behavior: always sort before computing card state.
     const sorted = [olderAddedLater, newer].sort(compareEntriesNewestFirst);
-    const state = computeCardState("claude_pro_5h_window", sorted, now);
+    const state = computeCardState("chatgpt_codex_5h_window", sorted, now);
     assert.equal(state.kind, "OK");
     if (state.kind === "OK") assert.equal(state.entry.id, "newer");
   });

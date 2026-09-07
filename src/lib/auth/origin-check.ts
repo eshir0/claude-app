@@ -8,10 +8,23 @@ import "server-only";
  * A missing Origin header and the literal string "null" are both treated as
  * untrusted — some sandboxed/redirected browser contexts send "null" rather
  * than omitting the header, and "no header, so allow" is not a safe default.
+ *
+ * APP_ORIGIN may hold more than one origin, comma-separated (e.g. a LAN IP
+ * and a port-forwarded public IP that both reach this same server) — each
+ * is still matched by exact string equality, never a wildcard/prefix match.
  */
+function trustedOrigins(): Set<string> {
+  const raw = process.env.APP_ORIGIN ?? "";
+  return new Set(
+    raw
+      .split(",")
+      .map((o) => o.trim())
+      .filter((o) => o.length > 0),
+  );
+}
+
 export function isTrustedOrigin(req: Request): boolean {
   const origin = req.headers.get("origin");
   if (!origin || origin === "null") return false;
-  const trusted = process.env.APP_ORIGIN;
-  return Boolean(trusted) && origin === trusted;
+  return trustedOrigins().has(origin);
 }

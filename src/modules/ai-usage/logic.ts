@@ -65,9 +65,15 @@ export const createEntrySchema = z
 
 export type CreateEntryInput = z.infer<typeof createEntrySchema>;
 
-/** Client-side helper: "80% remaining" -> stored as 20% used. Never applied silently. */
-export function remainingToUsedPercent(remainingPercent: number): number {
-  return 100 - remainingPercent;
+/**
+ * Display-only conversion: the DB and every collector always store/produce
+ * "percent USED" (see AiUsageEntry.usagePercent's own doc comment) — this
+ * never changes, so historical data and the collector's math stay simple.
+ * UI components that want to show "percent REMAINING" instead convert at
+ * render time with this, rather than storing a different quantity.
+ */
+export function usedToRemainingPercent(usedPercent: number): number {
+  return 100 - usedPercent;
 }
 
 const optionalTrimmedString = z.preprocess(toUndefinedIfEmpty, z.string().optional());

@@ -1,6 +1,6 @@
 import "server-only";
 import { prisma } from "@/lib/prisma";
-import type { AiUsageEntry } from "@/generated/prisma/client";
+import type { AiUsageEntry, EntrySource } from "@/generated/prisma/client";
 import { USAGE_METRICS } from "./metrics";
 import {
   type CreateEntryInput,
@@ -12,10 +12,12 @@ import {
 import type { AiUsageEntryDTO, CardStatesResponse } from "./types";
 
 // This is the ONLY module that touches Prisma for AI usage data. Manual
-// entry (via the API route) and any future automated collector both go
-// through createUsageEntry() — the route handler is what hardcodes
-// source: 'MANUAL'; this function itself does not read source from the
-// caller's input type at all (CreateEntryInput has no `source` field).
+// entry (via the API route) and the OpenAI/Codex collector both go through
+// createUsageEntry() — CreateEntryInput itself has no `source` field (a
+// client HTTP request body can never smuggle one in), so `source` is
+// always an explicit argument supplied by server-side code only: the
+// manual-entry route passes nothing (defaults to MANUAL), the collector
+// passes "AUTO" explicitly.
 
 function toDTO(row: AiUsageEntry): AiUsageEntryDTO {
   return {
@@ -30,7 +32,10 @@ function toDTO(row: AiUsageEntry): AiUsageEntryDTO {
   };
 }
 
-export async function createUsageEntry(input: CreateEntryInput): Promise<AiUsageEntryDTO> {
+export async function createUsageEntry(
+  input: CreateEntryInput,
+  source: EntrySource = "MANUAL",
+): Promise<AiUsageEntryDTO> {
   const row = await prisma.aiUsageEntry.create({
     data: {
       metricId: input.metricId,
@@ -38,7 +43,7 @@ export async function createUsageEntry(input: CreateEntryInput): Promise<AiUsage
       note: input.note ?? null,
       recordedAt: new Date(input.recordedAt),
       resetsAt: input.resetsAt ? new Date(input.resetsAt) : null,
-      source: "MANUAL",
+      source,
     },
   });
   return toDTO(row);

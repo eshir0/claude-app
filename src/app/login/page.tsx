@@ -15,20 +15,32 @@ export default function LoginPage() {
     setPending(true);
     setError(null);
 
-    const res = await fetch("/api/auth/login", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ password }),
-    });
+    try {
+      const res = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password }),
+      });
 
-    setPending(false);
-    if (!res.ok) {
-      const body = await res.json().catch(() => null);
-      setError(body?.error?.message ?? "로그인에 실패했습니다.");
-      return;
+      if (!res.ok) {
+        const body = await res.json().catch(() => null);
+        setError(body?.error?.message ?? `로그인에 실패했습니다. (${res.status})`);
+        return;
+      }
+      router.push("/");
+      router.refresh();
+    } catch (err) {
+      // A rejected fetch (network error, connection reset, blocked request)
+      // previously left the button stuck on "로그인 중..." forever with no
+      // feedback, because nothing downstream of the await ever ran.
+      setError(
+        err instanceof Error
+          ? `요청이 실패했습니다: ${err.message}`
+          : "요청이 실패했습니다. 네트워크 연결을 확인해주세요.",
+      );
+    } finally {
+      setPending(false);
     }
-    router.push("/");
-    router.refresh();
   }
 
   return (

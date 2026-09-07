@@ -34,3 +34,31 @@ model AiUsageEntry {
 
   @@index([metricId, recordedAt])
 }
+
+enum ConnectionProvider {
+  OPENAI
+}
+
+enum ConnectionStatus {
+  CONNECTED
+  ERROR
+}
+
+// A saved, encrypted OAuth credential (access_token + refresh_token + expiry)
+// for one provider, obtained via the provider's own official device-code
+// login flow — never a scraped browser session. One row per provider; this
+// is a single-user app so there is never more than one live connection per
+// service. `encryptedState` holds an AES-256-GCM-encrypted JSON blob of the
+// token set — never stored or logged in plaintext. Losing
+// CREDENTIAL_ENCRYPTION_KEY makes existing rows permanently undecryptable by
+// design (no key-recovery backdoor).
+model ServiceConnection {
+  id             String             @id @default(cuid())
+  provider       ConnectionProvider @unique
+  encryptedState String
+  status         ConnectionStatus   @default(CONNECTED)
+  lastError      String?
+  lastCheckedAt  DateTime?
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+}

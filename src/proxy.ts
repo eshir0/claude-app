@@ -1,7 +1,13 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { getIronSession } from "iron-session";
 import { nextProxyCookies } from "iron-session";
-import { SESSION_COOKIE_NAME, SESSION_TTL_SECONDS, isAuthenticated, type SessionData } from "@/lib/auth/session";
+import {
+  SESSION_COOKIE_NAME,
+  SESSION_TTL_SECONDS,
+  isAuthenticated,
+  secureCookieFlag,
+  type SessionData,
+} from "@/lib/auth/session";
 
 /**
  * UX-layer gate only — NOT the security boundary. This redirects an
@@ -36,7 +42,7 @@ async function checkSession(request: NextRequest, response: NextResponse) {
     ttl: SESSION_TTL_SECONDS,
     cookieOptions: {
       httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
+      secure: secureCookieFlag(),
       sameSite: "lax",
       path: "/",
     },

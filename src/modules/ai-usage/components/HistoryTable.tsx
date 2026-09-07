@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { USAGE_METRICS } from "@/modules/ai-usage/metrics";
+import { usedToRemainingPercent } from "@/modules/ai-usage/logic";
 import type { AiUsageEntryDTO } from "@/modules/ai-usage/types";
 import { useAiUsageData } from "./AiUsageDataProvider";
 
@@ -88,7 +89,7 @@ export default function HistoryTable() {
             <tr className="border-b border-zinc-200 text-xs text-zinc-500 dark:border-zinc-800">
               <th className="py-2 pr-2 font-medium">확인 시각</th>
               <th className="py-2 pr-2 font-medium">지표</th>
-              <th className="py-2 pr-2 font-medium">사용률</th>
+              <th className="py-2 pr-2 font-medium">남은 비율</th>
               <th className="py-2 pr-2 font-medium">출처</th>
               <th className="py-2 pr-2 font-medium">메모</th>
               <th className="py-2 pr-2 font-medium" />
@@ -114,7 +115,7 @@ export default function HistoryTable() {
                   <tr key={item.id} className="border-b border-zinc-100 dark:border-zinc-900">
                     <td className="py-2 pr-2 whitespace-nowrap">{new Date(item.recordedAt).toLocaleString()}</td>
                     <td className="py-2 pr-2">{metric?.displayName ?? item.metricId}</td>
-                    <td className="py-2 pr-2 tabular-nums">{item.usagePercent}%</td>
+                    <td className="py-2 pr-2 tabular-nums">{usedToRemainingPercent(item.usagePercent)}%</td>
                     <td className="py-2 pr-2">
                       <span
                         className={`rounded px-1.5 py-0.5 text-xs ${

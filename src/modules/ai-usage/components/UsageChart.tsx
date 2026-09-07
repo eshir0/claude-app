@@ -11,6 +11,7 @@ import {
   CartesianGrid,
 } from "recharts";
 import { USAGE_METRICS } from "@/modules/ai-usage/metrics";
+import { usedToRemainingPercent } from "@/modules/ai-usage/logic";
 import type { AiUsageEntryDTO } from "@/modules/ai-usage/types";
 import { useAiUsageData } from "./AiUsageDataProvider";
 
@@ -56,7 +57,7 @@ export default function UsageChart() {
   const chartData = points.map((p) => ({
     x: new Date(p.recordedAt).getTime(),
     label: new Date(p.recordedAt).toLocaleString(),
-    usagePercent: p.usagePercent,
+    remainingPercent: usedToRemainingPercent(p.usagePercent),
   }));
 
   return (
@@ -110,11 +111,11 @@ export default function UsageChart() {
               <YAxis domain={[0, 100]} fontSize={12} />
               <Tooltip
                 labelFormatter={(v) => (typeof v === "number" ? new Date(v).toLocaleString() : String(v))}
-                formatter={(value) => [`${value}%`, "사용률"]}
+                formatter={(value) => [`${value}%`, "남은 비율"]}
               />
               <Line
                 type="linear"
-                dataKey="usagePercent"
+                dataKey="remainingPercent"
                 stroke="#3f3f46"
                 dot={{ r: 3 }}
                 connectNulls={false}

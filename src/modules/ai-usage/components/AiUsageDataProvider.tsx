@@ -5,12 +5,11 @@ import { createContext, useCallback, useContext, useState, type ReactNode } from
 type MutationResult = { ok: true } | { ok: false; error: string };
 
 interface AiUsageDataContextValue {
-  /** Bumped on every successful create/delete. HistoryTable/UsageChart
-   * re-fetch their own data whenever this changes — this is what makes
-   * "the same hook called in two places" into "actually shared state":
-   * both read the same version number from one Context instance. */
+  /** Bumped on every successful delete. HistoryTable/UsageChart re-fetch
+   * their own data whenever this changes — this is what makes "the same
+   * hook called in two places" into "actually shared state": both read the
+   * same version number from one Context instance. */
   version: number;
-  createEntry: (input: Record<string, unknown>) => Promise<MutationResult>;
   deleteEntry: (id: string) => Promise<MutationResult>;
 }
 
@@ -28,19 +27,6 @@ async function readErrorMessage(res: Response, fallback: string): Promise<string
 export function AiUsageDataProvider({ children }: { children: ReactNode }) {
   const [version, setVersion] = useState(0);
 
-  const createEntry = useCallback(async (input: Record<string, unknown>): Promise<MutationResult> => {
-    const res = await fetch("/api/ai-usage", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(input),
-    });
-    if (!res.ok) {
-      return { ok: false, error: await readErrorMessage(res, `저장 실패 (${res.status})`) };
-    }
-    setVersion((v) => v + 1);
-    return { ok: true };
-  }, []);
-
   const deleteEntry = useCallback(async (id: string): Promise<MutationResult> => {
     const res = await fetch(`/api/ai-usage/${id}`, { method: "DELETE" });
     if (!res.ok && res.status !== 204) {
@@ -51,7 +37,7 @@ export function AiUsageDataProvider({ children }: { children: ReactNode }) {
   }, []);
 
   return (
-    <AiUsageDataContext.Provider value={{ version, createEntry, deleteEntry }}>
+    <AiUsageDataContext.Provider value={{ version, deleteEntry }}>
       {children}
     </AiUsageDataContext.Provider>
   );

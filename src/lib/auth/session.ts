@@ -27,6 +27,25 @@ function requireSecret(): string {
   return secret;
 }
 
+/**
+ * Normally `Secure` tracks NODE_ENV (on in production). The one escape hatch:
+ * `FORCE_INSECURE_COOKIES=true` turns it off regardless — for testing a
+ * production build over plain HTTP on a LAN IP or other non-`localhost`
+ * hostname, where browsers do NOT extend the "secure context" exception
+ * they give to `http://localhost` (confirmed: login otherwise appears to
+ * silently no-op — the server sets the cookie, the browser drops it since
+ * it's Secure-flagged over an insecure origin, and the client bounces
+ * straight back to /login with no visible error).
+ *
+ * Never set this for anything actually reachable over the open internet —
+ * it disables the one thing standing between a session cookie and any
+ * network path between the browser and this server.
+ */
+export function secureCookieFlag(): boolean {
+  if (process.env.FORCE_INSECURE_COOKIES === "true") return false;
+  return process.env.NODE_ENV === "production";
+}
+
 function sessionOptions(): SessionOptions {
   return {
     cookieName: SESSION_COOKIE_NAME,
@@ -34,7 +53,7 @@ function sessionOptions(): SessionOptions {
     ttl: SESSION_TTL_SECONDS,
     cookieOptions: {
       httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
+      secure: secureCookieFlag(),
       sameSite: "lax",
       path: "/",
     },

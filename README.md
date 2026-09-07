@@ -1,8 +1,14 @@
 # 사용량 대시보드
 
-개인 서버에 배포하는 자체 호스팅 대시보드. 확장 가능한 베이스 위에, 첫 모듈로 Claude Pro /
-ChatGPT Codex 구독 사용량을 수동으로 기록·조회하는 기능을 제공한다. 공식 API가 없는
-개인 구독 사용량을, 서비스 UI에서 직접 확인한 값을 사람이 입력하는 방식으로 추적한다.
+개인 서버에 배포하는 자체 호스팅 대시보드. 확장 가능한 베이스 위에, 첫 모듈로 ChatGPT
+Codex 구독 사용량을 추적한다. `/ai-usage/connections`에서 Codex CLI의 공식 기기 코드
+(device code) 로그인으로 본인 ChatGPT 계정에 연결하면 실시간 수집이 가능하고, 수동 기록도
+계속 지원한다(폼으로 값을 직접 입력).
+
+Claude Pro는 추적하지 않는다 — Anthropic이 2026-02 Consumer Terms of Service 개정으로
+Free/Pro/Max 구독 OAuth 토큰을 Claude Code/claude.ai가 아닌 제3의 도구에서 쓰는 것을
+명시적으로 금지했고, 세션 쿠키를 이용한 방식은 Cloudflare 봇 탐지에 막혀 기술적으로도
+불가능했다. 자세한 배경은 프로젝트 메모리 참고.
 
 ## 기술 스택
 
@@ -60,6 +66,24 @@ Docker Compose 쪽 작은따옴표 규칙은 [공식 문서](https://docs.docker
 `.env.example` 참고. `AUTH_PASSWORD_HASH`, `SESSION_SECRET`, `APP_ORIGIN`, `DATABASE_URL`은
 필수 — 하나라도 없거나 형식이 잘못되면 서버가 요청을 받기 전에 스스로 종료한다
 (`src/instrumentation.ts` / `src/instrumentation-node.ts`).
+
+## LAN IP 등 `localhost`가 아닌 주소로 접속할 때 로그인이 안 되는 경우
+
+프로덕션 빌드는 세션 쿠키에 `Secure` 플래그를 켠다. 브라우저는 `http://localhost`만
+예외적으로 "보안 컨텍스트"로 취급해 평문 HTTP에서도 `Secure` 쿠키를 저장하는데, **LAN
+IP(예: `192.168.x.x`)나 다른 호스트명은 이 예외에 해당하지 않는다.** 그 결과: 로그인
+요청 자체는 서버에서 성공(200)하지만 브라우저가 응답의 `Set-Cookie`를 조용히 버리고,
+바로 다시 `/login`으로 튕겨서 마치 아무 일도 안 일어난 것처럼 보인다.
+
+같은 기기의 다른 브라우저/터미널에서 서버 로그를 확인해보면 로그인 요청이 실제로
+200을 반환하는데도 클라이언트에서 계속 미인증으로 리다이렉트된다면 이 문제일 가능성이
+크다. 실제 인터넷에 노출하는 배포에는 해당하지 않는 문제이며(그 경우는 HTTPS가
+전제이므로 `Secure`가 정상 동작), **LAN/사설망에서 평문 HTTP로 테스트할 때만** `.env`에
+아래를 추가한다:
+
+```
+FORCE_INSECURE_COOKIES=true
+```
 
 ## 로그인 시도 제한과 신뢰 가능한 클라이언트 IP
 
