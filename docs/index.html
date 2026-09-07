@@ -419,6 +419,7 @@
       <li><a href="#env">환경변수 설명</a></li>
       <li><a href="#openai">ChatGPT/Codex 연결</a></li>
       <li><a href="#proxmox">Proxmox 연결</a></li>
+      <li><a href="#sensors">온도 모니터링 (선택)</a></li>
       <li><a href="#notes">알아두면 좋은 점</a></li>
     </ol>
   </nav>
@@ -446,6 +447,7 @@
         <li><a href="#env">환경변수 설명</a></li>
         <li><a href="#openai">ChatGPT/Codex 연결</a></li>
         <li><a href="#proxmox">Proxmox 연결</a></li>
+        <li><a href="#sensors">온도 모니터링 (선택)</a></li>
         <li><a href="#notes">알아두면 좋은 점</a></li>
       </ol>
     </details>
@@ -493,17 +495,17 @@
 
         <div class="screen">
           <div class="screen-title"><strong>서버</strong><span class="screen-path">/server</span></div>
-          <p>Proxmox 호스트 상태와 VM/컨테이너 목록.</p>
+          <p>Proxmox 호스트 상태(CPU·메모리·디스크·온도), 데이터센터 스토리지, VM/컨테이너별 CPU·메모리·디스크·네트워크 속도. 저장공간은 75%부터 주황, 90%부터 빨간색으로 표시됩니다.</p>
           <div class="mock-row">
             <div class="mock-card">
               <div class="mock-label">호스트: proxmox · CPU</div>
               <div class="mock-value">0%</div>
-              <div class="mock-sub">32코어 · 메모리 5.0GB / 60.2GB</div>
+              <div class="mock-sub">32코어 · CPU 온도 42.6°C · 메모리 5.0GB / 60.2GB</div>
             </div>
             <div class="mock-card">
               <div class="mock-label">mk1 <span class="pill pill-good">running</span></div>
               <div class="mock-value" style="font-size:1.05rem;">CPU 0%</div>
-              <div class="mock-sub">메모리 39MB / 8.0GB</div>
+              <div class="mock-sub">메모리 39MB / 8.0GB · ↓12KB/s ↑3KB/s</div>
             </div>
           </div>
           <p class="mock-example-tag">위 카드는 실제 화면에서 나온 값을 예시로 재구성한 것입니다.</p>
@@ -574,10 +576,12 @@ npm run build && npm run start</pre>
             <tr><td><code class="inline">PROXMOX_TOKEN_ID</code></td><td>Proxmox API 토큰 이름</td><td><code class="inline">root@pam!dashboard</code></td></tr>
             <tr><td><code class="inline">PROXMOX_TOKEN_SECRET</code></td><td>Proxmox API 토큰 비밀값</td><td>토큰 만들 때 한 번만 표시됨</td></tr>
             <tr><td><code class="inline">PROXMOX_SSL_FINGERPRINT</code></td><td>Proxmox 서버가 진짜인지 확인하는 지문값</td><td><a href="#proxmox">Proxmox 연결하기</a> 참고</td></tr>
+            <tr><td><code class="inline">PROXMOX_SSH_HOST</code></td><td>(선택) 온도 조회용 Proxmox 호스트의 LAN IP</td><td><code class="inline">192.168.1.24</code></td></tr>
+            <tr><td><code class="inline">PROXMOX_SSH_KEY_PATH</code></td><td>(선택) 온도 조회 전용 SSH 개인키 경로</td><td><a href="#sensors">온도 모니터링 설정하기</a> 참고</td></tr>
           </tbody>
         </table>
       </div>
-      <p><code class="inline">PROXMOX_*</code> 네 개는 서버 모니터링 기능에만 쓰입니다 — 안 채워도 앱은 정상 실행되고, "서버" 화면만 "연결 안 됨"으로 나옵니다.</p>
+      <p><code class="inline">PROXMOX_*</code> 앞의 네 가지는 서버 모니터링 기능에 쓰입니다 — 안 채워도 앱은 정상 실행되고, "서버" 화면만 "연결 안 됨"으로 나옵니다. <code class="inline">PROXMOX_SSH_*</code> 두 가지는 그 위에 온도 표시를 더하는 선택 사항입니다.</p>
     </section>
 
     <section id="openai">
@@ -639,6 +643,46 @@ PROXMOX_SSL_FINGERPRINT=&lt;6번의 ssl_fingerprint&gt;</pre>
       <div class="callout callout-info">
         <p>지문값을 등록해두는 이유는, 접속할 때마다 "지금 접속한 서버가 진짜 내 Proxmox가 맞는지" 확인하기 위해서입니다. Proxmox 인증서는 공인 기관 서명이 아니라 자체 서명이라, 지문을 고정해두지 않으면 중간에서 누군가 가로채도 알아챌 방법이 없습니다.</p>
       </div>
+    </section>
+
+    <section id="sensors">
+      <div class="section-head">
+        <span class="section-num">선택</span>
+        <h2>온도 모니터링 설정하기 (선택)</h2>
+        <p class="sub">Proxmox의 API 자체에는 온도 정보가 아예 없습니다. 그래서 API 토큰이 아니라 SSH로 호스트에 직접 접속해 <code class="inline">sensors</code> 명령을 읽어오는 다른 방식을 씁니다. 설정 안 해도 나머지 기능은 전부 정상 작동합니다.</p>
+      </div>
+
+      <ol class="steps">
+        <li>
+          <strong>전용 SSH 키 만들기</strong>
+          <p>이 앱을 실행하는 서버에서:</p>
+          <pre>ssh-keygen -t ed25519 -f ~/.ssh/proxmox_dashboard_ed25519 -N ""
+cat ~/.ssh/proxmox_dashboard_ed25519.pub</pre>
+        </li>
+        <li>
+          <strong>Proxmox 웹 UI → Shell에서 키 등록하기</strong>
+          <p>왼쪽 트리에서 노드 클릭 → 오른쪽 위 <code class="inline">&gt;_ Shell</code> 클릭. <code class="inline">&lt;공개키&gt;</code> 자리에 1번 결과를 통째로 넣고 실행:</p>
+          <pre>mkdir -p ~/.ssh && chmod 700 ~/.ssh
+echo 'command="sensors -j",no-port-forwarding,no-X11-forwarding,no-agent-forwarding,no-pty &lt;공개키&gt;' &gt;&gt; ~/.ssh/authorized_keys
+chmod 600 ~/.ssh/authorized_keys</pre>
+          <div class="callout callout-warn" style="margin-top:10px;">
+            <p><code class="inline">command="sensors -j"</code>가 핵심입니다 — 이 키로는 <strong><code class="inline">sensors -j</code> 명령 말고는 아무것도 실행할 수 없게</strong> 강제로 제한합니다. 앱에 문제가 생기거나 키가 유출돼도 "온도 조회" 이상은 못 합니다.</p>
+          </div>
+        </li>
+        <li>
+          <strong>lm-sensors 설치 확인</strong>
+          <p>같은 Shell에서:</p>
+          <pre>which sensors || (apt update && apt install -y lm-sensors && yes | sensors-detect --auto)
+sensors -j</pre>
+          <p>JSON이 나오면 성공. 하드웨어에 따라 팬 속도처럼 일부 값은 애초에 안 잡힐 수 있는데, 그런 값은 억지로 만들어내지 않고 그냥 표시하지 않습니다.</p>
+        </li>
+        <li>
+          <strong><code class="inline">.env</code>에 채우기</strong>
+          <pre>PROXMOX_SSH_HOST=&lt;Proxmox 호스트의 LAN IP, 예: 192.168.1.24&gt;
+PROXMOX_SSH_KEY_PATH=/home/유저/.ssh/proxmox_dashboard_ed25519</pre>
+          <p><code class="inline">PROXMOX_URL</code>(포트포워딩된 공인 주소)과 달리, 이건 <strong>LAN 안에서 직접 접속하는 IP</strong>를 씁니다 — Proxmox 웹 UI의 <em>Datacenter → 노드 → System → Network</em>에서 확인할 수 있습니다.</p>
+        </li>
+      </ol>
     </section>
 
     <section id="notes">

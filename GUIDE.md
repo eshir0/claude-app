@@ -18,6 +18,7 @@
 - [환경변수 하나씩 설명](#환경변수-하나씩-설명)
 - [ChatGPT/Codex 연결하기](#chatgptcodex-연결하기)
 - [Proxmox 연결하기](#proxmox-연결하기)
+- [온도 모니터링 설정하기 (선택)](#온도-모니터링-설정하기-선택)
 - [알아두면 좋은 점](#알아두면-좋은-점)
 
 ---
@@ -46,9 +47,11 @@ ChatGPT 계정을 연결하는 곳. 한 번 연결해두면 서버가 30분마�
 
 ### 서버 (`/server`)
 
-- **호스트 카드**: CPU·메모리·루트 디스크 사용량, 가동 시간
+- **호스트 카드**: CPU·메모리·루트 디스크 사용량, 가동 시간, (설정했다면) **CPU/GPU/NVMe 온도**
 - **데이터센터 스토리지**: VM/컨테이너 디스크가 실제로 저장되는 공간(`local-lvm` 등) — 호스트 자체 디스크와는 별개입니다
-- **VM/컨테이너 목록**: 이름, 종류(QEMU/LXC), 실행 상태, CPU·메모리 사용량
+- **VM/컨테이너 목록**: 이름, 종류(QEMU/LXC), 실행 상태, CPU·메모리·**디스크**·**네트워크 속도(↓↑)**, 가동 시간
+
+디스크·저장공간 사용량은 **75% 넘으면 주황색, 90% 넘으면 빨간색**으로 표시됩니다. QEMU 가상머신은 하이퍼바이저가 가상디스크 안을 들여다볼 수 없어서 디스크 사용량이 0으로 나올 수 있는데, 고장이 아니라 원래 그렇습니다(LXC 컨테이너는 정상적으로 나옵니다).
 
 ---
 
@@ -112,8 +115,10 @@ ChatGPT 계정을 연결하는 곳. 한 번 연결해두면 서버가 30분마�
 | `PROXMOX_TOKEN_ID` | Proxmox API 토큰 이름 | `root@pam!dashboard` |
 | `PROXMOX_TOKEN_SECRET` | Proxmox API 토큰 비밀값 | 토큰 만들 때 한 번만 보여줌 |
 | `PROXMOX_SSL_FINGERPRINT` | Proxmox 서버가 진짜인지 확인하는 지문값 | 아래 [Proxmox 연결하기](#proxmox-연결하기) 참고 |
+| `PROXMOX_SSH_HOST` | (선택) 온도 조회용 Proxmox 호스트의 **LAN IP** | `192.168.1.24` |
+| `PROXMOX_SSH_KEY_PATH` | (선택) 온도 조회 전용 SSH 개인키 경로 | 아래 [온도 모니터링 설정하기](#온도-모니터링-설정하기-선택) 참고 |
 
-`PROXMOX_*` 네 개는 서버 모니터링 기능에만 쓰입니다 — 안 채워도 앱은 정상 실행되고, "서버" 화면만 "연결 안 됨"으로 나옵니다.
+`PROXMOX_*` 앞의 네 가지는 서버 모니터링 기능에 쓰입니다 — 안 채워도 앱은 정상 실행되고, "서버" 화면만 "연결 안 됨"으로 나옵니다. `PROXMOX_SSH_*` 두 가지는 그 위에 온도 표시를 더하는 선택 사항입니다.
 
 ---
 
@@ -155,6 +160,41 @@ Proxmox 웹 UI에 로그인한 상태에서 진행합니다.
    ```
 
 지문값을 등록해두는 이유는, 나중에 접속할 때마다 "지금 접속한 서버가 진짜 내 Proxmox가 맞는지"를 매번 확인하기 위해서입니다 — Proxmox 인증서가 공인 기관 서명이 아니라 자체 서명이라서, 이렇게 지문을 고정해두지 않으면 중간에서 누군가 가로채도 알아챌 방법이 없습니다.
+
+---
+
+## 온도 모니터링 설정하기 (선택)
+
+Proxmox의 API 자체에는 온도 정보가 아예 없습니다. 그래서 이 기능은 API 토큰이 아니라 **SSH로 Proxmox 호스트에 직접 접속해서 `sensors` 명령을 읽어오는** 다른 방식을 씁니다. 설정 안 해도 나머지 기능은 전부 정상 작동하고, "서버" 화면에 온도 줄만 안 보입니다.
+
+1. **전용 SSH 키 만들기** (이 앱을 실행하는 서버에서)
+   ```bash
+   ssh-keygen -t ed25519 -f ~/.ssh/proxmox_dashboard_ed25519 -N ""
+   cat ~/.ssh/proxmox_dashboard_ed25519.pub
+   ```
+
+2. **Proxmox 웹 UI → `Shell`에서 키 등록하기**
+   왼쪽 트리에서 노드 클릭 → 오른쪽 위 `>_ Shell` 클릭. 아래 명령에서 `<공개키>` 자리에 1번에서 출력된 값을 통째로 넣고 실행:
+   ```bash
+   mkdir -p ~/.ssh && chmod 700 ~/.ssh
+   echo 'command="sensors -j",no-port-forwarding,no-X11-forwarding,no-agent-forwarding,no-pty <공개키>' >> ~/.ssh/authorized_keys
+   chmod 600 ~/.ssh/authorized_keys
+   ```
+   > `command="sensors -j"`가 핵심입니다 — 이 키로는 **`sensors -j` 명령 말고는 아무것도 실행할 수 없게** 강제로 제한합니다. 이 앱에 문제가 생기거나 키가 유출되어도 "온도 조회" 이상은 못 합니다.
+
+3. **lm-sensors 설치 확인** (같은 Shell에서)
+   ```bash
+   which sensors || (apt update && apt install -y lm-sensors && yes | sensors-detect --auto)
+   sensors -j
+   ```
+   결과로 JSON이 나오면 성공. 참고로 하드웨어에 따라 아무것도 안 잡히거나(`Sorry, no sensors were detected`), 팬 속도처럼 일부 값은 애초에 안 잡힐 수 있습니다 — 그런 값은 억지로 만들어내지 않고 그냥 표시하지 않습니다.
+
+4. **`.env`에 채우기**
+   ```
+   PROXMOX_SSH_HOST=<Proxmox 호스트의 LAN IP, 예: 192.168.1.24>
+   PROXMOX_SSH_KEY_PATH=/home/유저/.ssh/proxmox_dashboard_ed25519
+   ```
+   `PROXMOX_URL`(포트포워딩된 공인 주소)과 달리, 이건 **LAN 안에서 직접 접속하는 IP**를 씁니다 — Proxmox 웹 UI의 `Datacenter → <노드> → System → Network`에서 확인할 수 있습니다.
 
 ---
 
