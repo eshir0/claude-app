@@ -42,7 +42,13 @@ export function Sidebar({ items }: { items: NavItem[] }) {
         >
           {open ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
         </button>
-        <span className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">내 대시보드</span>
+        <Link
+          href="/"
+          onClick={() => setOpen(false)}
+          className="rounded-md text-sm font-semibold text-zinc-900 hover:underline dark:text-zinc-100"
+        >
+          내 대시보드
+        </Link>
       </header>
 
       {open && (
