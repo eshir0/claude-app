@@ -76,6 +76,14 @@ export function usedToRemainingPercent(usedPercent: number): number {
   return 100 - usedPercent;
 }
 
+/** Compact "M/D HH:mm" label for chart axis ticks — a date-only tick can't
+ * distinguish two points recorded hours apart on the same day. Uses the
+ * viewer's local time, in Date's own local getters (not UTC). */
+export function formatAxisTick(date: Date): string {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${date.getMonth() + 1}/${date.getDate()} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
 /**
  * "N시간 M분 후 초기화" style countdown to a known resetsAt — `now` is
  * injectable for deterministic tests. Never fabricates a reset time itself;

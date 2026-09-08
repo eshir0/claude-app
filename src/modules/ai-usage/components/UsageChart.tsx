@@ -11,7 +11,7 @@ import {
   CartesianGrid,
 } from "recharts";
 import { USAGE_METRICS } from "@/modules/ai-usage/metrics";
-import { usedToRemainingPercent } from "@/modules/ai-usage/logic";
+import { usedToRemainingPercent, formatAxisTick } from "@/modules/ai-usage/logic";
 import type { AiUsageEntryDTO } from "@/modules/ai-usage/types";
 import { useAiUsageData } from "./AiUsageDataProvider";
 
@@ -105,13 +105,16 @@ export default function UsageChart() {
                 dataKey="x"
                 type="number"
                 domain={["dataMin", "dataMax"]}
-                tickFormatter={(v: number) => new Date(v).toLocaleDateString()}
+                tickFormatter={(v: number) => formatAxisTick(new Date(v))}
                 fontSize={12}
               />
               <YAxis domain={[0, 100]} fontSize={12} />
               <Tooltip
                 labelFormatter={(v) => (typeof v === "number" ? new Date(v).toLocaleString() : String(v))}
                 formatter={(value) => [`${value}%`, "남은 비율"]}
+                contentStyle={{ backgroundColor: "#27272a", border: "1px solid #3f3f46", borderRadius: 8 }}
+                labelStyle={{ color: "#fafafa", fontWeight: 600, marginBottom: 4 }}
+                itemStyle={{ color: "#fafafa" }}
               />
               <Line
                 type="linear"
