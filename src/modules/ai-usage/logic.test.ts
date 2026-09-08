@@ -7,7 +7,6 @@ import {
   compareEntriesNewestFirst,
   usedToRemainingPercent,
   formatResetCountdown,
-  formatAxisTick,
 } from "./logic.ts";
 import type { AiUsageEntryDTO } from "./types.ts";
 
@@ -196,15 +195,6 @@ describe("formatResetCountdown", () => {
   test("already past resetsAt", () => {
     assert.equal(formatResetCountdown("2026-09-07T11:00:00Z", now), "초기화 시각 지남");
     assert.equal(formatResetCountdown("2026-09-07T12:00:00Z", now), "초기화 시각 지남");
-  });
-});
-
-describe("formatAxisTick", () => {
-  test("pads single-digit hours/minutes, no leading zero on month/day", () => {
-    assert.equal(formatAxisTick(new Date(2026, 8, 8, 8, 5)), "9/8 08:05");
-  });
-  test("no padding needed", () => {
-    assert.equal(formatAxisTick(new Date(2026, 11, 25, 23, 59)), "12/25 23:59");
   });
 });
 

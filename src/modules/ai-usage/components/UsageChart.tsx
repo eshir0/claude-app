@@ -11,7 +11,7 @@ import {
   CartesianGrid,
 } from "recharts";
 import { USAGE_METRICS } from "@/modules/ai-usage/metrics";
-import { usedToRemainingPercent, formatAxisTick } from "@/modules/ai-usage/logic";
+import { usedToRemainingPercent } from "@/modules/ai-usage/logic";
 import type { AiUsageEntryDTO } from "@/modules/ai-usage/types";
 import { useAiUsageData } from "./AiUsageDataProvider";
 
@@ -105,7 +105,7 @@ export default function UsageChart() {
                 dataKey="x"
                 type="number"
                 domain={["dataMin", "dataMax"]}
-                tickFormatter={(v: number) => formatAxisTick(new Date(v))}
+                tickFormatter={(v: number) => new Date(v).toLocaleDateString()}
                 fontSize={12}
               />
               <YAxis domain={[0, 100]} fontSize={12} />

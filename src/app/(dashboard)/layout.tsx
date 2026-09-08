@@ -11,9 +11,11 @@ export default async function DashboardLayout({ children }: { children: ReactNod
   const navItems = getNavItems();
 
   return (
-    <div className="flex flex-1">
+    <div className="flex flex-1 flex-col">
       <Sidebar items={navItems} />
-      <main className="flex-1 overflow-x-auto p-6">{children}</main>
+      <main className="flex-1 overflow-x-auto p-4 pt-[calc(3.5rem+1rem)] sm:p-6 sm:pt-[calc(3.5rem+1.5rem)]">
+        {children}
+      </main>
     </div>
   );
 }
