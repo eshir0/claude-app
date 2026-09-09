@@ -13,7 +13,7 @@ const TOPBAR_HEIGHT = "h-14";
 
 export function Sidebar({ items }: { items: NavItem[] }) {
   const pathname = usePathname();
-  const [open, setOpen] = useState(true);
+  const [open, setOpen] = useState(false);
 
   // Closing the drawer on navigation matters most on narrow screens, where
   // it overlays the content the link just navigated to.
