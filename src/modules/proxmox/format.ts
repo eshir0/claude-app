@@ -17,12 +17,24 @@ export function formatPercent(fraction: number): string {
 const WARN_THRESHOLD = 0.75;
 const CRITICAL_THRESHOLD = 0.9;
 
+export type UsageSeverity = "ok" | "warning" | "critical";
+
+/** Same 0.75/0.9 thresholds usageLevelClass has always used, as a category
+ * rather than a Tailwind string — for callers (e.g. a colored progress bar)
+ * that need more than just text color out of the same severity judgement. */
+export function usageSeverity(fraction: number): UsageSeverity {
+  if (fraction >= CRITICAL_THRESHOLD) return "critical";
+  if (fraction >= WARN_THRESHOLD) return "warning";
+  return "ok";
+}
+
 /** Tailwind text-color classes for a 0-1 usage fraction — "" (inherit) below
  * the warn threshold, so callers can just interpolate this into className
  * without an extra conditional. */
 export function usageLevelClass(fraction: number): string {
-  if (fraction >= CRITICAL_THRESHOLD) return "text-red-600 dark:text-red-400";
-  if (fraction >= WARN_THRESHOLD) return "text-amber-600 dark:text-amber-400";
+  const severity = usageSeverity(fraction);
+  if (severity === "critical") return "text-red-600 dark:text-red-400";
+  if (severity === "warning") return "text-amber-600 dark:text-amber-400";
   return "";
 }
 

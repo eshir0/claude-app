@@ -1,9 +1,43 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { RefreshCw } from "lucide-react";
 import type { ProxmoxOverview } from "../types";
-import { formatBytes, formatPercent, formatUptime, usageLevelClass, tempLevelClass } from "../format";
+import {
+  formatBytes,
+  formatPercent,
+  formatUptime,
+  usageLevelClass,
+  usageSeverity,
+  tempLevelClass,
+  type UsageSeverity,
+} from "../format";
+
+// Same severity → color convention as the AI-usage dashboard's cards (green/
+// amber/red), reused here so the two modules read as one app.
+const SEVERITY_STYLES: Record<UsageSeverity, { text: string; bar: string }> = {
+  ok: { text: "text-green-600 dark:text-green-400", bar: "bg-green-500" },
+  warning: { text: "text-amber-600 dark:text-amber-400", bar: "bg-amber-500" },
+  critical: { text: "text-red-600 dark:text-red-400", bar: "bg-red-500" },
+};
+
+function MetricBar({ label, fraction, valueText }: { label: string; fraction: number; valueText: string }) {
+  const styles = SEVERITY_STYLES[usageSeverity(fraction)];
+  return (
+    <div>
+      <div className="flex items-center justify-between text-sm">
+        <span className="text-zinc-500">{label}</span>
+        <span className={`tabular-nums ${styles.text}`}>{valueText}</span>
+      </div>
+      <div className="mt-1 h-1.5 w-full rounded-full bg-zinc-200 dark:bg-zinc-800">
+        <div
+          className={`h-1.5 rounded-full ${styles.bar}`}
+          style={{ width: `${Math.max(0, Math.min(100, fraction * 100))}%` }}
+        />
+      </div>
+    </div>
+  );
+}
 
 const REFRESH_INTERVAL_MS = 60 * 1000;
 
@@ -11,11 +45,6 @@ interface ServerViewProps {
   configured: boolean;
   initialOverview: ProxmoxOverview | null;
   initialError: string | null;
-}
-
-interface GuestRate {
-  inBytesPerSec: number;
-  outBytesPerSec: number;
 }
 
 function guestKey(g: { type: string; vmid: number }): string {
@@ -35,46 +64,6 @@ export default function ServerView({ configured, initialOverview, initialError }
   const [overview, setOverview] = useState(initialOverview);
   const [error, setError] = useState(initialError);
   const [loading, setLoading] = useState(false);
-  const [rates, setRates] = useState<Map<string, GuestRate>>(new Map());
-  // Proxmox's netin/netout are cumulative byte counters, not a speed — a
-  // rate only exists once there are two samples to diff. Kept in a ref
-  // (not state) since updating it must never itself trigger a re-render.
-  // Date.now() is impure, so it's seeded in an effect (post-render), not
-  // during render itself.
-  const prevSnapshotRef = useRef<{ guests: ProxmoxOverview["guests"]; at: number } | null>(null);
-  useEffect(() => {
-    if (initialOverview && !prevSnapshotRef.current) {
-      prevSnapshotRef.current = { guests: initialOverview.guests, at: Date.now() };
-    }
-    // Only meant to seed the very first snapshot once, from the server-provided initial data.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  function recordSnapshotAndComputeRates(next: ProxmoxOverview) {
-    const now = Date.now();
-    const prev = prevSnapshotRef.current;
-    if (prev) {
-      const deltaSeconds = (now - prev.at) / 1000;
-      if (deltaSeconds > 0) {
-        const prevByKey = new Map(prev.guests.map((g) => [guestKey(g), g]));
-        const nextRates = new Map<string, GuestRate>();
-        for (const g of next.guests) {
-          const p = prevByKey.get(guestKey(g));
-          if (!p || g.status !== "running") continue;
-          const inDelta = g.netInBytes - p.netInBytes;
-          const outDelta = g.netOutBytes - p.netOutBytes;
-          // A negative delta means the counter reset (guest restarted) —
-          // show 0 rather than a nonsense negative speed.
-          nextRates.set(guestKey(g), {
-            inBytesPerSec: Math.max(0, inDelta) / deltaSeconds,
-            outBytesPerSec: Math.max(0, outDelta) / deltaSeconds,
-          });
-        }
-        setRates(nextRates);
-      }
-    }
-    prevSnapshotRef.current = { guests: next.guests, at: now };
-  }
 
   const refresh = useCallback(async () => {
     if (!configured) return;
@@ -86,7 +75,6 @@ export default function ServerView({ configured, initialOverview, initialError }
         return;
       }
       const data: ProxmoxOverview = await res.json();
-      recordSnapshotAndComputeRates(data);
       setOverview(data);
       setError(null);
     } catch {
@@ -145,11 +133,24 @@ export default function ServerView({ configured, initialOverview, initialError }
             {overview.nodes.map((n) => (
               <div key={n.node} className="rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
                 <div className="text-sm font-medium text-zinc-600 dark:text-zinc-400">호스트: {n.node}</div>
-                <dl className="mt-2 grid grid-cols-2 gap-x-2 gap-y-1 text-sm">
-                  <dt className="text-zinc-500">CPU</dt>
-                  <dd className="text-right tabular-nums">
-                    {formatPercent(n.cpuFraction)} ({n.cpuCount}코어)
-                  </dd>
+                <div className="mt-3 flex flex-col gap-3">
+                  <MetricBar
+                    label="CPU"
+                    fraction={n.cpuFraction}
+                    valueText={`${formatPercent(n.cpuFraction)} (${n.cpuCount}코어)`}
+                  />
+                  <MetricBar
+                    label="메모리"
+                    fraction={n.memTotal > 0 ? n.memUsed / n.memTotal : 0}
+                    valueText={`${formatBytes(n.memUsed)} / ${formatBytes(n.memTotal)}`}
+                  />
+                  <MetricBar
+                    label="루트 디스크"
+                    fraction={n.diskTotal > 0 ? n.diskUsed / n.diskTotal : 0}
+                    valueText={`${formatBytes(n.diskUsed)} / ${formatBytes(n.diskTotal)}`}
+                  />
+                </div>
+                <dl className="mt-3 grid grid-cols-2 gap-x-2 gap-y-1 border-t border-zinc-100 pt-3 text-sm dark:border-zinc-900">
                   {overview.sensors?.cpuTempC != null && (
                     <>
                       <dt className="text-zinc-500">CPU 온도</dt>
@@ -168,14 +169,6 @@ export default function ServerView({ configured, initialOverview, initialError }
                       </dd>
                     </>
                   )}
-                  <dt className="text-zinc-500">메모리</dt>
-                  <dd className="text-right tabular-nums">
-                    {formatBytes(n.memUsed)} / {formatBytes(n.memTotal)}
-                  </dd>
-                  <dt className="text-zinc-500">루트 디스크</dt>
-                  <dd className={`text-right tabular-nums ${usageLevelClass(n.diskTotal > 0 ? n.diskUsed / n.diskTotal : 0)}`}>
-                    {formatBytes(n.diskUsed)} / {formatBytes(n.diskTotal)}
-                  </dd>
                   {overview.sensors?.nvmeTempC != null && (
                     <>
                       <dt className="text-zinc-500">NVMe 온도</dt>
@@ -189,39 +182,43 @@ export default function ServerView({ configured, initialOverview, initialError }
                 </dl>
               </div>
             ))}
-          </div>
 
-          <div>
-            <div className="mb-2 text-sm font-medium text-zinc-600 dark:text-zinc-400">
-              데이터센터 스토리지 — VM/컨테이너 디스크가 실제로 저장되는 곳(호스트 루트 디스크와 별개)
-            </div>
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {overview.storages.map((s) => (
-                <div key={s.storage} className="rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium text-zinc-600 dark:text-zinc-400">{s.storage}</span>
-                    <span
-                      className={`rounded px-1.5 py-0.5 text-xs ${
-                        s.active
-                          ? "bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300"
-                          : "bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400"
-                      }`}
-                    >
-                      {s.active ? "active" : "inactive"}
-                    </span>
-                  </div>
-                  <div className="mt-1 text-xs text-zinc-500">{s.type}</div>
-                  <div className={`mt-2 text-sm tabular-nums ${usageLevelClass(s.total > 0 ? s.used / s.total : 0)}`}>
-                    {formatBytes(s.used)} / {formatBytes(s.total)}
-                    <span className="ml-1 text-zinc-500">({formatPercent(s.total > 0 ? s.used / s.total : 0)})</span>
-                  </div>
+            {overview.storages.map((s) => (
+              <div key={s.storage} className="rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
+                <div className="flex items-center justify-between">
+                  <span
+                    className="text-sm font-medium text-zinc-600 dark:text-zinc-400"
+                    title="VM/컨테이너 디스크가 실제로 저장되는 곳(호스트 루트 디스크와 별개)"
+                  >
+                    {s.storage}
+                  </span>
+                  <span
+                    className={`rounded px-1.5 py-0.5 text-xs ${
+                      s.active
+                        ? "bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300"
+                        : "bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400"
+                    }`}
+                  >
+                    {s.active ? "active" : "inactive"}
+                  </span>
                 </div>
-              ))}
-            </div>
+                <div className="mt-1 text-xs text-zinc-500">{s.type}</div>
+                <div className="mt-3">
+                  <MetricBar
+                    label="사용량"
+                    fraction={s.total > 0 ? s.used / s.total : 0}
+                    valueText={`${formatBytes(s.used)} / ${formatBytes(s.total)}`}
+                  />
+                </div>
+              </div>
+            ))}
           </div>
 
           <div className="overflow-x-auto rounded-lg border border-zinc-200 dark:border-zinc-800">
-            <table className="w-full text-left text-sm">
+            {/* whitespace-nowrap (inherited by every th/td) keeps columns from
+                wrapping character-by-character on narrow screens — the
+                wrapping div above scrolls horizontally instead. */}
+            <table className="w-full whitespace-nowrap text-left text-sm">
               <thead>
                 <tr className="border-b border-zinc-200 text-xs text-zinc-500 dark:border-zinc-800">
                   <th className="px-3 py-2 font-medium">이름</th>
@@ -230,21 +227,18 @@ export default function ServerView({ configured, initialOverview, initialError }
                   <th className="px-3 py-2 font-medium">CPU</th>
                   <th className="px-3 py-2 font-medium">메모리</th>
                   <th className="px-3 py-2 font-medium">디스크</th>
-                  <th className="px-3 py-2 font-medium">네트워크</th>
                   <th className="px-3 py-2 font-medium">가동 시간</th>
                 </tr>
               </thead>
               <tbody>
                 {overview.guests.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="px-3 py-4 text-center text-zinc-500">
+                    <td colSpan={7} className="px-3 py-4 text-center text-zinc-500">
                       VM/컨테이너가 없습니다
                     </td>
                   </tr>
                 ) : (
-                  overview.guests.map((g) => {
-                    const rate = rates.get(guestKey(g));
-                    return (
+                  overview.guests.map((g) => (
                       <tr key={guestKey(g)} className="border-b border-zinc-100 dark:border-zinc-900">
                         <td className="px-3 py-2">{g.name}</td>
                         <td className="px-3 py-2 uppercase text-zinc-500">{g.type}</td>
@@ -276,19 +270,9 @@ export default function ServerView({ configured, initialOverview, initialError }
                             "—"
                           )}
                         </td>
-                        <td className="px-3 py-2 tabular-nums whitespace-nowrap">
-                          {g.status !== "running" ? "—" : rate ? (
-                            <>
-                              ↓{formatBytes(rate.inBytesPerSec)}/s ↑{formatBytes(rate.outBytesPerSec)}/s
-                            </>
-                          ) : (
-                            <span className="text-zinc-400">측정 중...</span>
-                          )}
-                        </td>
                         <td className="px-3 py-2">{g.status === "running" ? formatUptime(g.uptimeSeconds) : "—"}</td>
                       </tr>
-                    );
-                  })
+                  ))
                 )}
               </tbody>
             </table>

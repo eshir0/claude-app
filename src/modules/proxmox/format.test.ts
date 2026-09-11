@@ -1,6 +1,6 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-import { formatBytes, formatPercent, formatUptime, usageLevelClass, tempLevelClass } from "./format.ts";
+import { formatBytes, formatPercent, formatUptime, usageLevelClass, usageSeverity, tempLevelClass } from "./format.ts";
 
 describe("formatBytes", () => {
   test("shows MB below 1 GB", () => {
@@ -39,6 +39,20 @@ describe("usageLevelClass", () => {
   test("red at/above 90%", () => {
     assert.equal(usageLevelClass(0.9), "text-red-600 dark:text-red-400");
     assert.equal(usageLevelClass(1), "text-red-600 dark:text-red-400");
+  });
+});
+
+describe("usageSeverity", () => {
+  test("ok below 75%", () => {
+    assert.equal(usageSeverity(0.74), "ok");
+  });
+  test("warning from 75% up to (not including) 90%", () => {
+    assert.equal(usageSeverity(0.75), "warning");
+    assert.equal(usageSeverity(0.89), "warning");
+  });
+  test("critical at/above 90%", () => {
+    assert.equal(usageSeverity(0.9), "critical");
+    assert.equal(usageSeverity(1), "critical");
   });
 });
 

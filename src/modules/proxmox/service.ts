@@ -29,8 +29,6 @@ interface RawGuest {
   mem: number;
   maxmem: number;
   uptime: number;
-  netin: number;
-  netout: number;
   disk: number;
   maxdisk: number;
 }
@@ -55,8 +53,6 @@ function mapGuest(g: RawGuest, type: "qemu" | "lxc"): ProxmoxGuestStatus {
     memTotal: g.maxmem,
     uptimeSeconds: g.uptime,
     // A stopped guest doesn't report these — default to 0 rather than NaN.
-    netInBytes: g.netin ?? 0,
-    netOutBytes: g.netout ?? 0,
     diskUsed: g.disk ?? 0,
     diskTotal: g.maxdisk ?? 0,
   };

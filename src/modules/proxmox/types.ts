@@ -19,11 +19,6 @@ export interface ProxmoxGuestStatus {
   memUsed: number;
   memTotal: number;
   uptimeSeconds: number;
-  /** Cumulative bytes since the guest last started — a running total, not
-   * a rate. A rate (bytes/sec) is computed client-side by diffing two
-   * snapshots over time — see ServerView.tsx. */
-  netInBytes: number;
-  netOutBytes: number;
   /** LXC containers report real disk usage. QEMU VMs typically report 0
    * here (the hypervisor can't see inside a virtual disk's filesystem
    * without a guest agent) even though diskTotal is a real provisioned
