@@ -76,20 +76,15 @@ function renderBody(state: LottoCardState) {
   return (
     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
       {state.comboSet.combos.map((combo, i) => (
-        <ComboCard key={i} combo={combo} isPick={i === state.comboSet.randomPickIndex} />
+        <ComboCard key={i} combo={combo} />
       ))}
     </div>
   );
 }
 
-function ComboCard({ combo, isPick }: { combo: LottoComboAnnotation; isPick: boolean }) {
+function ComboCard({ combo }: { combo: LottoComboAnnotation }) {
   return (
-    <div
-      className={`flex flex-col gap-2 rounded-lg border border-zinc-200 p-3 dark:border-zinc-800 ${
-        isPick ? "border-l-4 border-l-green-500" : ""
-      }`}
-    >
-      {isPick && <span className="text-xs font-medium text-green-600 dark:text-green-400">오늘의 랜덤 조합</span>}
+    <div className="flex flex-col gap-2 rounded-lg border border-zinc-200 p-3 dark:border-zinc-800">
       <div className="flex flex-wrap gap-1.5">
         {combo.combo.map((n, i) => (
           <span
