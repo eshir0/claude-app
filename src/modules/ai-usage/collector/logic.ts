@@ -68,3 +68,56 @@ export function mapCodexUsageToEntries(body: unknown): MappedUsageEntry[] {
   }
   return entries;
 }
+
+// Shape confirmed directly against a real GET /api/usage/{connectionId}
+// response from this user's own OmniRoute instance (2026-09-11, Claude Pro
+// connection) — not guessed. `quotas` keys were observed as "session (5h)"
+// and "weekly (7d)" for this Claude connection; OmniRoute uses plain
+// "session"/"weekly" (no suffix) for at least one other provider, so this
+// matches by case-insensitive prefix rather than an exact key.
+export interface OmnirouteQuota {
+  used: number;
+  total: number;
+  resetAt: string;
+  unlimited?: boolean;
+}
+
+export interface OmnirouteUsageResponseBody {
+  quotas?: Record<string, OmnirouteQuota> | null;
+}
+
+export interface MappedClaudeUsageEntry {
+  metricId: "claude_pro_5h_window" | "claude_pro_weekly";
+  usagePercent: number;
+  resetsAt: Date;
+}
+
+/**
+ * Maps OmniRoute's resolved Claude quota snapshot to this app's metrics.
+ * A quota key that matches neither prefix, or one with `unlimited: true`
+ * (no percent-of-limit meaning) or a non-numeric/zero `total`, is skipped
+ * rather than guessed at.
+ */
+export function mapOmnirouteClaudeUsageToEntries(body: unknown): MappedClaudeUsageEntry[] {
+  const quotas = (body as OmnirouteUsageResponseBody | null)?.quotas ?? {};
+  const entries: MappedClaudeUsageEntry[] = [];
+  for (const [key, quota] of Object.entries(quotas)) {
+    if (!quota || quota.unlimited) continue;
+    if (typeof quota.used !== "number" || typeof quota.total !== "number" || quota.total <= 0) continue;
+    const normalizedKey = key.trim().toLowerCase();
+    const metricId = normalizedKey.startsWith("session")
+      ? "claude_pro_5h_window"
+      : normalizedKey.startsWith("weekly")
+        ? "claude_pro_weekly"
+        : null;
+    if (!metricId) continue;
+    const resetAt = new Date(quota.resetAt);
+    if (Number.isNaN(resetAt.getTime())) continue;
+    entries.push({
+      metricId,
+      usagePercent: Math.max(0, Math.min(100, (quota.used / quota.total) * 100)),
+      resetsAt: resetAt,
+    });
+  }
+  return entries;
+}

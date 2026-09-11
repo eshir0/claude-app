@@ -1,7 +1,8 @@
 import "server-only";
 import { getValidAccessToken, recordCollectionResult } from "./connectionService.ts";
 import { fetchCodexUsage } from "./usageApi.ts";
-import { mapCodexUsageToEntries } from "./logic.ts";
+import { isOmnirouteClaudeConfigured, fetchOmnirouteClaudeUsage } from "./omnirouteApi.ts";
+import { mapCodexUsageToEntries, mapOmnirouteClaudeUsageToEntries } from "./logic.ts";
 import { createUsageEntry } from "../service.ts";
 import type { AiUsageEntryDTO } from "../types.ts";
 
@@ -57,6 +58,45 @@ export async function collectAndSaveCodexUsage(): Promise<CollectOutcome> {
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     await recordCollectionResult({ ok: false, error: message });
+    return { ok: false, reason: "ERROR", message };
+  }
+}
+
+/**
+ * Fetches Claude Pro's real session/weekly quota from a self-hosted
+ * OmniRoute instance (see omnirouteApi.ts) and saves each as an AUTO entry.
+ * Unlike the Codex path, there is no per-connection DB row to update here —
+ * OmniRoute itself owns and refreshes the underlying Anthropic OAuth
+ * connection; this app only reads OmniRoute's already-resolved numbers.
+ */
+export async function collectAndSaveClaudeUsageFromOmniroute(): Promise<CollectOutcome> {
+  if (!isOmnirouteClaudeConfigured()) return { ok: false, reason: "NOT_CONNECTED" };
+
+  try {
+    const result = await fetchOmnirouteClaudeUsage();
+    if (!result.ok) {
+      return { ok: false, reason: "FETCH_FAILED", status: result.status, body: result.body };
+    }
+
+    const recordedAt = new Date();
+    const mapped = mapOmnirouteClaudeUsageToEntries(result.body);
+    const savedEntries: AiUsageEntryDTO[] = [];
+    for (const entry of mapped) {
+      const saved = await createUsageEntry(
+        {
+          metricId: entry.metricId,
+          usagePercent: entry.usagePercent,
+          recordedAt: recordedAt.toISOString(),
+          resetsAt: entry.resetsAt.toISOString(),
+        },
+        "AUTO",
+      );
+      savedEntries.push(saved);
+    }
+
+    return { ok: true, status: result.status, body: result.body, savedEntries };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
     return { ok: false, reason: "ERROR", message };
   }
 }

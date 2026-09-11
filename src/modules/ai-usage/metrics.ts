@@ -8,7 +8,7 @@
 
 export interface UsageMetricDef {
   id: string;
-  provider: "openai";
+  provider: "openai" | "anthropic";
   product: string;
   displayName: string;
   /** false = no numeric input UI; shown as "수치 확인 미지원" only. */
@@ -42,6 +42,29 @@ export const USAGE_METRICS: readonly UsageMetricDef[] = [
     limitPeriod: {
       kind: "weekly",
       resetNote: "chatgpt.com/codex/settings/usage에서 확인해 입력",
+    },
+  },
+  {
+    id: "claude_pro_5h_window",
+    provider: "anthropic",
+    product: "Claude Pro",
+    displayName: "Claude – 5시간 한도",
+    supportsNumericInput: true,
+    limitPeriod: {
+      kind: "fixed_window",
+      windowHours: 5,
+      resetNote: "OmniRoute(자체 호스팅 라우터)를 통해 실시간으로 자동 수집",
+    },
+  },
+  {
+    id: "claude_pro_weekly",
+    provider: "anthropic",
+    product: "Claude Pro",
+    displayName: "Claude – 주간 한도",
+    supportsNumericInput: true,
+    limitPeriod: {
+      kind: "weekly",
+      resetNote: "OmniRoute(자체 호스팅 라우터)를 통해 실시간으로 자동 수집",
     },
   },
 ] as const;

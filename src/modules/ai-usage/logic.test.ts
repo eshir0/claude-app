@@ -6,6 +6,7 @@ import {
   computeCardState,
   compareEntriesNewestFirst,
   usedToRemainingPercent,
+  usageSeverity,
   formatResetCountdown,
 } from "./logic.ts";
 import type { AiUsageEntryDTO } from "./types.ts";
@@ -177,6 +178,21 @@ describe("usedToRemainingPercent", () => {
     assert.equal(usedToRemainingPercent(20), 80);
     assert.equal(usedToRemainingPercent(0), 100);
     assert.equal(usedToRemainingPercent(100), 0);
+  });
+});
+
+describe("usageSeverity", () => {
+  test("critical under 10% remaining", () => {
+    assert.equal(usageSeverity(0), "critical");
+    assert.equal(usageSeverity(9), "critical");
+  });
+  test("warning from 10% up to (not including) 50% remaining", () => {
+    assert.equal(usageSeverity(10), "warning");
+    assert.equal(usageSeverity(49), "warning");
+  });
+  test("ok at/above 50% remaining", () => {
+    assert.equal(usageSeverity(50), "ok");
+    assert.equal(usageSeverity(100), "ok");
   });
 });
 

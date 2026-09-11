@@ -76,6 +76,20 @@ export function usedToRemainingPercent(usedPercent: number): number {
   return 100 - usedPercent;
 }
 
+export type UsageSeverity = "ok" | "warning" | "critical";
+
+/**
+ * Traffic-light thresholds on REMAINING percent (not used percent) — chosen
+ * to match a reference dashboard UI the user asked for, not sourced from
+ * any provider's own definition of "running low": critical under 10% left,
+ * warning under 50% left, ok otherwise.
+ */
+export function usageSeverity(remainingPercent: number): UsageSeverity {
+  if (remainingPercent < 10) return "critical";
+  if (remainingPercent < 50) return "warning";
+  return "ok";
+}
+
 /**
  * "N시간 M분 후 초기화" style countdown to a known resetsAt — `now` is
  * injectable for deterministic tests. Never fabricates a reset time itself;

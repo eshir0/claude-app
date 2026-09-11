@@ -1,6 +1,9 @@
 // Node-only half of instrumentation.ts's register() hook — see that file's
 // comment for why this is a separate module rather than an inline branch.
-import { collectAndSaveCodexUsage } from "@/modules/ai-usage/collector/collectService";
+import {
+  collectAndSaveCodexUsage,
+  collectAndSaveClaudeUsageFromOmniroute,
+} from "@/modules/ai-usage/collector/collectService";
 import { checkAndUpdateLotto } from "@/modules/lotto/collector/collectService";
 
 const BCRYPT_HASH_RE = /^\$2[aby]\$\d{2}\$[./A-Za-z0-9]{53}$/;
@@ -81,10 +84,19 @@ export function startBackgroundCollector(): void {
     try {
       const result = await collectAndSaveCodexUsage();
       if (!result.ok && result.reason !== "NOT_CONNECTED") {
-        console.error("[ai-usage] background collection did not succeed:", result);
+        console.error("[ai-usage] Codex background collection did not succeed:", result);
       }
     } catch (err) {
-      console.error("[ai-usage] background collection threw:", err);
+      console.error("[ai-usage] Codex background collection threw:", err);
+    }
+
+    try {
+      const result = await collectAndSaveClaudeUsageFromOmniroute();
+      if (!result.ok && result.reason !== "NOT_CONNECTED") {
+        console.error("[ai-usage] Claude (OmniRoute) background collection did not succeed:", result);
+      }
+    } catch (err) {
+      console.error("[ai-usage] Claude (OmniRoute) background collection threw:", err);
     }
   }
 
