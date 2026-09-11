@@ -1,6 +1,7 @@
 // Node-only half of instrumentation.ts's register() hook — see that file's
 // comment for why this is a separate module rather than an inline branch.
 import { collectAndSaveCodexUsage } from "@/modules/ai-usage/collector/collectService";
+import { checkAndUpdateLotto } from "@/modules/lotto/collector/collectService";
 
 const BCRYPT_HASH_RE = /^\$2[aby]\$\d{2}\$[./A-Za-z0-9]{53}$/;
 
@@ -91,4 +92,41 @@ export function startBackgroundCollector(): void {
   // up first; the interval then repeats for the life of the process.
   setTimeout(tick, 5_000);
   setInterval(tick, BACKGROUND_COLLECT_INTERVAL_MS);
+}
+
+// Cheap to check often (one HTML page fetch, backfill aside) even though
+// the underlying draw only changes once a week — actual regeneration is
+// gated by LottoComboSet.forRound's unique constraint regardless of how
+// often this runs, so a 6-hour interval just bounds how stale the "latest
+// round" check can get after a restart, without hammering superkts.com.
+const LOTTO_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
+
+let lottoSchedulerStarted = false;
+
+/**
+ * Same shape as startBackgroundCollector() above: idempotent-start guard,
+ * independent timer, errors logged and swallowed (never thrown uncaught).
+ * A no-op (not an error) once the DB is fully backfilled and up to date —
+ * this is what makes the home page's lotto widget update itself without
+ * anyone opening the app or clicking anything.
+ */
+export function startLottoScheduler(): void {
+  if (lottoSchedulerStarted) return;
+  lottoSchedulerStarted = true;
+
+  async function tick() {
+    try {
+      const result = await checkAndUpdateLotto();
+      if (!result.ok) {
+        console.error("[lotto] Scheduled check did not succeed:", result);
+      }
+    } catch (err) {
+      console.error("[lotto] Scheduled check threw:", err);
+    }
+  }
+
+  // Offset from the ai-usage collector's 5s start so the two don't both
+  // fire in the same tick on a fresh boot.
+  setTimeout(tick, 15_000);
+  setInterval(tick, LOTTO_CHECK_INTERVAL_MS);
 }

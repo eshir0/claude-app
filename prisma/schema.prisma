@@ -62,3 +62,38 @@ model ServiceConnection {
   createdAt      DateTime           @default(now())
   updatedAt      DateTime           @updatedAt
 }
+
+// One real historical Lotto 6/45 draw, scraped from superkts.com. A local
+// cache — not the source of truth — so the combo generator's frequency
+// groups / co-occurrence counts / exact-match check don't require
+// re-scraping the whole history on every run. No array type in SQLite, so
+// the 6 main numbers are 6 plain columns rather than a JSON/CSV blob.
+model LottoDraw {
+  id        String   @id @default(cuid())
+  round     Int      @unique
+  n1        Int
+  n2        Int
+  n3        Int
+  n4        Int
+  n5        Int
+  n6        Int
+  bonus     Int
+  fetchedAt DateTime @default(now())
+}
+
+// A set of 5 generated combinations, computed once for a given round (the
+// most recent round known at generation time). `forRound` being unique is
+// what makes weekly regeneration idempotent — the background scheduler
+// checks for new rounds far more often than once a week, but this
+// constraint guarantees at most one generated set per round no matter how
+// many times the check runs.
+model LottoComboSet {
+  id              String   @id @default(cuid())
+  forRound        Int      @unique
+  // JSON-stringified LottoComboAnnotation[] (see src/modules/lotto/types.ts)
+  // — validated at the application layer (zod) on read, same reasoning as
+  // AiUsageEntry.metricId not being a DB enum.
+  combosJson      String
+  randomPickIndex Int
+  generatedAt     DateTime @default(now())
+}
