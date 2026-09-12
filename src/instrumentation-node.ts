@@ -106,21 +106,40 @@ export function startBackgroundCollector(): void {
   setInterval(tick, BACKGROUND_COLLECT_INTERVAL_MS);
 }
 
-// Cheap to check often (one HTML page fetch, backfill aside) even though
-// the underlying draw only changes once a week — actual regeneration is
-// gated by LottoComboSet.forRound's unique constraint regardless of how
-// often this runs, so a 6-hour interval just bounds how stale the "latest
-// round" check can get after a restart, without hammering superkts.com.
-const LOTTO_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
+// User preference: land on Monday morning rather than as soon as Saturday's
+// draw result appears — a deliberate weekly cadence, not a technical
+// constraint of the scraper (which is idempotent and cheap to run anytime).
+// Korea has no DST, so 09:00 KST is always exactly 00:00 UTC — no timezone
+// library needed.
+const LOTTO_WEEKLY_CHECK_UTC_DAY = 1; // Monday
+const LOTTO_WEEKLY_CHECK_UTC_HOUR = 0; // 00:00 UTC == 09:00 KST
+
+function msUntilNextLottoCheck(from: Date): number {
+  const target = new Date(
+    Date.UTC(from.getUTCFullYear(), from.getUTCMonth(), from.getUTCDate(), LOTTO_WEEKLY_CHECK_UTC_HOUR, 0, 0, 0),
+  );
+  const daysUntilTarget = (LOTTO_WEEKLY_CHECK_UTC_DAY - from.getUTCDay() + 7) % 7;
+  target.setUTCDate(target.getUTCDate() + daysUntilTarget);
+  if (target.getTime() <= from.getTime()) {
+    target.setUTCDate(target.getUTCDate() + 7);
+  }
+  return target.getTime() - from.getTime();
+}
 
 let lottoSchedulerStarted = false;
 
 /**
  * Same shape as startBackgroundCollector() above: idempotent-start guard,
- * independent timer, errors logged and swallowed (never thrown uncaught).
- * A no-op (not an error) once the DB is fully backfilled and up to date —
- * this is what makes the home page's lotto widget update itself without
- * anyone opening the app or clicking anything.
+ * errors logged and swallowed (never thrown uncaught). A no-op (not an
+ * error) once the DB is fully backfilled and up to date — this is what
+ * makes the home page's lotto widget update itself without anyone opening
+ * the app or clicking anything.
+ *
+ * Two triggers, not one: an immediate boot-time check (unconditional catch-up
+ * for a fresh/empty DB or a restart that missed last Monday's window
+ * entirely), plus a recurring check re-scheduled from real wall-clock time
+ * after each run — rather than setInterval — so a long-lived process can't
+ * drift off Monday 09:00 KST over many weeks.
  */
 export function startLottoScheduler(): void {
   if (lottoSchedulerStarted) return;
@@ -137,8 +156,15 @@ export function startLottoScheduler(): void {
     }
   }
 
+  function scheduleNextWeeklyCheck() {
+    setTimeout(async () => {
+      await tick();
+      scheduleNextWeeklyCheck();
+    }, msUntilNextLottoCheck(new Date()));
+  }
+
   // Offset from the ai-usage collector's 5s start so the two don't both
   // fire in the same tick on a fresh boot.
   setTimeout(tick, 15_000);
-  setInterval(tick, LOTTO_CHECK_INTERVAL_MS);
+  scheduleNextWeeklyCheck();
 }
