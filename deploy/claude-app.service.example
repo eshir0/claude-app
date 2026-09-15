@@ -16,6 +16,13 @@
 # — a relative path resolves against the wrong directory otherwise. See
 # scripts/sync-standalone-assets.sh's own comment and the project's gotchas
 # memory for the same issue found the hard way.
+#
+# PORT/HOSTNAME are internal-only (127.0.0.1) here — see
+# claude-app-access-agent.service.example, which is the process that
+# actually listens on the public port and forwards here. Don't point PORT
+# at 0.0.0.0:3000 directly unless you're deliberately skipping that agent
+# (in which case TRUSTED_PROXY/CLIENT_IP_HEADER below are unsafe — remove
+# them too).
 
 [Unit]
 Description=Usage Dashboard (claude-app)
@@ -30,10 +37,13 @@ Restart=on-failure
 RestartSec=5
 
 Environment=NODE_ENV=production
-Environment=PORT=3000
-Environment=HOSTNAME=0.0.0.0
+Environment=PORT=3001
+Environment=HOSTNAME=127.0.0.1
 Environment=DATABASE_URL=file:/home/YOUR_USER/claude-app/prisma/dev.db
 Environment=CODEX_CLI_PATH=/home/YOUR_USER/claude-app/node_modules/.bin/codex
+Environment=TRUSTED_PROXY=true
+Environment=CLIENT_IP_HEADER=X-Forwarded-For
+Environment=ACCESS_LOG_INGEST_KEYS={"claude-app":"REPLACE_ME_GENERATED_SECRET"}
 
 [Install]
 WantedBy=default.target

@@ -3,6 +3,7 @@ import type { ModuleManifest, NavItem } from "./types";
 import { aiUsageModule } from "./ai-usage/manifest";
 import { proxmoxModule } from "./proxmox/manifest";
 import { lottoModule } from "./lotto/manifest";
+import { accessLogModule } from "./access-log/manifest";
 
 // Adding a module here wires it into the sidebar and the home page widget
 // grid automatically. It does NOT create the module's own pages, API
@@ -13,7 +14,7 @@ import { lottoModule } from "./lotto/manifest";
 // Order here is also render order on the home page (see
 // app/(dashboard)/page.tsx) — lottoModule is listed last so it renders as
 // the bottom-most section, per the placement the user chose for it.
-export const modules: ModuleManifest[] = [aiUsageModule, proxmoxModule, lottoModule];
+export const modules: ModuleManifest[] = [aiUsageModule, proxmoxModule, lottoModule, accessLogModule];
 
 export function getNavItems(): NavItem[] {
   return modules.map(({ id, label, href, iconKey }) => ({ id, label, href, iconKey }));

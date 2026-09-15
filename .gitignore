@@ -32,6 +32,9 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
+# Codex CLI's own runtime log, written to whatever the cwd happens to be
+# when it runs (e.g. during the device-code login flow) — not this app's.
+error.log
 
 # env files (can opt-in for committing if needed)
 .env*

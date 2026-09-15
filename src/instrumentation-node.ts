@@ -5,6 +5,7 @@ import {
   collectAndSaveClaudeUsageFromOmniroute,
 } from "@/modules/ai-usage/collector/collectService";
 import { checkAndUpdateLotto } from "@/modules/lotto/collector/collectService";
+import { runAccessLogMaintenance } from "@/modules/access-log/collector/collectService";
 
 const BCRYPT_HASH_RE = /^\$2[aby]\$\d{2}\$[./A-Za-z0-9]{53}$/;
 
@@ -167,4 +168,37 @@ export function startLottoScheduler(): void {
   // fire in the same tick on a fresh boot.
   setTimeout(tick, 15_000);
   scheduleNextWeeklyCheck();
+}
+
+// Gated on ACCESS_LOG_GEO_ENABLED — opt-out, default on per the user's
+// choice (unlike the OmniRoute integration, which is opt-in). Set to
+// "false" to keep only raw IPs in the access log with no third-party
+// GeoIP lookups at all.
+const ACCESS_LOG_GEO_INTERVAL_MS = 10 * 60 * 1000;
+
+let accessLogGeoResolverStarted = false;
+
+/**
+ * Same idempotent-start-guard shape as the two schedulers above. A no-op
+ * tick (zero external lookups) whenever there's nothing new to resolve,
+ * the resolver is in a provider-wide cooldown from a prior 429, or
+ * ACCESS_LOG_GEO_ENABLED=false.
+ */
+export function startAccessLogGeoResolver(): void {
+  if (accessLogGeoResolverStarted) return;
+  accessLogGeoResolverStarted = true;
+
+  if (process.env.ACCESS_LOG_GEO_ENABLED === "false") return;
+
+  async function tick() {
+    try {
+      await runAccessLogMaintenance();
+    } catch (err) {
+      console.error("[access-log] Scheduled maintenance threw:", err);
+    }
+  }
+
+  // Offset from the other two schedulers' 5s/15s starts.
+  setTimeout(tick, 25_000);
+  setInterval(tick, ACCESS_LOG_GEO_INTERVAL_MS);
 }

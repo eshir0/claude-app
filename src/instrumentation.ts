@@ -15,11 +15,11 @@
 // the edge bundle entirely instead of merely being unreachable inside it.
 export async function register() {
   if (process.env.NEXT_RUNTIME === "nodejs") {
-    const { validateRequiredEnv, startBackgroundCollector, startLottoScheduler } = await import(
-      "./instrumentation-node"
-    );
+    const { validateRequiredEnv, startBackgroundCollector, startLottoScheduler, startAccessLogGeoResolver } =
+      await import("./instrumentation-node");
     validateRequiredEnv();
     startBackgroundCollector();
     startLottoScheduler();
+    startAccessLogGeoResolver();
   }
 }

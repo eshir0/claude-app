@@ -67,7 +67,14 @@ function unauthorized(request: NextRequest) {
 
 export const config = {
   matcher: [
-    // Everything except: /login, /api/auth/login, static assets, favicon.
-    "/((?!login$|api/auth/login$|_next/static|_next/image|favicon.ico).*)",
+    // Everything except: /login, /api/auth/login, static assets, favicon,
+    // and /api/access-log/ingest — that last one is server-to-server
+    // (other machines' ip-log-agent.mjs instances, and this app's own),
+    // authenticated by its own per-source Bearer credential, and never
+    // carries a session cookie. It has to stay reachable without one, and
+    // it does its own auth check independently (see that route's own
+    // "Deliberately NOT requireSessionApi()" comment) — this exclusion is
+    // just about not gating it at this layer, not about skipping auth.
+    "/((?!login$|api/auth/login$|api/access-log/ingest$|_next/static|_next/image|favicon.ico).*)",
   ],
 };

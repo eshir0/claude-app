@@ -97,3 +97,55 @@ model LottoComboSet {
   randomPickIndex Int
   generatedAt     DateTime @default(now())
 }
+
+// One reported HTTP request, from this app or any other self-hosted server
+// running the same scripts/ip-log-agent.mjs in front of itself. `source` is
+// a caller-asserted label bound to a per-source credential at the ingest
+// API (see AGENTS/README "접속 기록"), not a cryptographic identity of the
+// request itself. `ip` is always canonicalized before storage (IPv4-mapped
+// IPv6 collapsed to IPv4, IPv6 in RFC-5952-equivalent canonical form) so the
+// same real client never splits across two textual representations. `path`
+// is the request's pathname ONLY — the query string is never read into
+// this app at all, let alone stored, since it can carry tokens/secrets.
+// `at` is always this server's own clock at ingestion time, never a
+// client-supplied timestamp (see collector/collectService.ts).
+model AccessLogEntry {
+  id        String   @id @default(cuid())
+  source    String
+  ip        String
+  method    String
+  path      String
+  userAgent String?
+  at        DateTime @default(now())
+
+  @@index([ip, at])
+  @@index([source, at])
+  @@index([at])
+}
+
+enum GeoLookupStatus {
+  // country/city populated (city may still be null if the provider lacked it)
+  RESOLVED
+  // not a globally routable public-unicast address eligible for lookup
+  // (see isGeoIpEligiblePublicAddress in modules/access-log/logic.ts) —
+  // permanent, never retried.
+  NOT_APPLICABLE
+  // transient provider/network error — retried after a backoff window.
+  FAILED
+}
+
+// One row per distinct IP ever seen in AccessLogEntry, decoupled from the
+// log rows themselves so a resolved location survives log retention pruning
+// independently — except that this row itself is deleted once no
+// AccessLogEntry references its ip anymore (see collector/collectService.ts
+// "orphan cleanup"), so this table never grows unbounded either.
+// `lastCheckedAt` is the last time this row was written OR attempted,
+// regardless of status — deliberately not named "resolvedAt", since a
+// FAILED row was never resolved.
+model IpGeoCache {
+  ip            String          @id
+  status        GeoLookupStatus
+  country       String?
+  city          String?
+  lastCheckedAt DateTime        @default(now())
+}

@@ -1,4 +1,4 @@
-import { BarChart3, Dices, LayoutDashboard, Server, type LucideIcon } from "lucide-react";
+import { BarChart3, Dices, LayoutDashboard, Server, Shield, type LucideIcon } from "lucide-react";
 
 // Generic iconKey -> icon mapping, not tied to any specific module id. A new
 // module just needs to declare an existing iconKey (or a new one added here)
@@ -7,6 +7,7 @@ const ICONS: Record<string, LucideIcon> = {
   "bar-chart": BarChart3,
   server: Server,
   dice: Dices,
+  shield: Shield,
 };
 
 const DEFAULT_ICON: LucideIcon = LayoutDashboard;

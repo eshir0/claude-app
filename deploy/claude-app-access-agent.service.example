@@ -1,0 +1,45 @@
+# Template for scripts/ip-log-agent.mjs, the reverse-proxy + access-log
+# reporter that actually listens on the public port in front of claude-app
+# (see claude-app.service.example, which now listens on 127.0.0.1:3001
+# only). This exact same script, with different env values, is what you
+# copy onto any OTHER self-hosted server whose connections you also want
+# centralized on this dashboard's /access-log page — see README "접속 기록".
+#
+# Install (for claude-app's own instance, on the SAME box as claude-app):
+#   mkdir -p ~/.config/systemd/user
+#   cp deploy/claude-app-access-agent.service.example ~/.config/systemd/user/claude-app-access-agent.service
+#   # edit the paths/values below
+#   systemctl --user daemon-reload
+#   systemctl --user enable --now claude-app-access-agent.service
+#
+# For a DIFFERENT server: copy only scripts/ip-log-agent.mjs (it has no
+# dependencies and doesn't need the rest of this repo), point
+# AGENT_APP_HOST/AGENT_APP_PORT at THAT server's own real service, and set
+# AGENT_INGEST_URL to claude-app's LAN address on ITS public agent port —
+# 127.0.0.1 only resolves on claude-app's own box:
+#   AGENT_INGEST_URL=http://<claude-app LAN IP>:3000/api/access-log/ingest
+# AGENT_SOURCE_NAME must match a key you added to claude-app's
+# ACCESS_LOG_INGEST_KEYS, and AGENT_INGEST_KEY must be that key's value.
+#
+# Logs: journalctl --user -u claude-app-access-agent -f
+
+[Unit]
+Description=Access-log reverse-proxy agent (claude-app)
+After=network.target claude-app.service
+Requires=claude-app.service
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/node /home/YOUR_USER/claude-app/scripts/ip-log-agent.mjs
+Restart=on-failure
+RestartSec=5
+
+Environment=AGENT_SOURCE_NAME=claude-app
+Environment=AGENT_PUBLIC_PORT=3000
+Environment=AGENT_APP_HOST=127.0.0.1
+Environment=AGENT_APP_PORT=3001
+Environment=AGENT_INGEST_URL=http://127.0.0.1:3001/api/access-log/ingest
+Environment=AGENT_INGEST_KEY=REPLACE_ME_GENERATED_SECRET
+
+[Install]
+WantedBy=default.target
