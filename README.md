@@ -188,6 +188,53 @@ AGENT_INGEST_URL=http://<claude-app의 LAN IP>:3000/api/access-log/ingest
 추가하고, 그 값을 그 서버의 `AGENT_INGEST_KEY`로 넣는다 — 서버마다 별도 credential이라
 한 서버의 키가 유출돼도 다른 서버(또는 claude-app 자신) 행세를 할 수 없다.
 
+### 중간에 NAT/VPN 게이트웨이가 하나 더 있는 경우(예: WireGuard)
+
+외부 → 공인 IP를 가진 홈 서버 → WireGuard 터널 → (자기 자신도 서버인) 게이트웨이 →
+claude-app 처럼, claude-app 앞에 순수 L3 NAT 홉이 하나 더 있는 구성이면 얘기가 다르다.
+그 홉이 **DNAT만** 한다면(목적지만 바꿈, 출발지는 그대로) 진짜 클라이언트 IP가 그대로
+살아서 도착하지만, 그 홉이 (흔히 응답 패킷이 다시 터널로 돌아오게 하려고) **자기 자신으로
+SNAT까지** 한다면 진짜 IP는 claude-app에 닿기도 전에 사라진다 — 이건 claude-app 쪽에서
+헤더를 아무리 잘 처리해도 복구할 수 없다. 그 홉의 raw 소켓 단계에서만 아직 진짜 IP가 남아있기
+때문이다.
+
+해결책은 그 게이트웨이에도 `ip-log-agent.mjs`를 그대로 하나 더 두는 것이다 — 단,
+`AGENT_INGEST_URL`/`AGENT_INGEST_KEY`를 아예 설정하지 않으면 **순수 릴레이 모드**로 동작해서
+(자기 접속을 보고하지 않고 프록시+실제 IP 전달만 함), 그 게이트웨이 자신을 access-log의
+별도 source로 남기고 싶지 않다면 그대로 두면 된다. 그 게이트웨이가 원래 하던 순수 iptables/
+nftables DNAT를 **로컬 프로세스로 리다이렉트**하도록 바꾸고(그래야 패킷이 커널 NAT 규칙을
+거쳐 바로 다음 홉으로 가버리지 않고 이 프로세스가 실제로 받는다), 그 프로세스가 자신이 본
+진짜 소켓 주소로 `X-Forwarded-For`를 설정해서 claude-app으로 넘긴다.
+
+그다음 claude-app 쪽 에이전트에 `AGENT_TRUSTED_UPSTREAM_IPS`로 그 게이트웨이의 (LAN 쪽)
+IP를 정확히 등록해야, claude-app의 에이전트가 "이 특정 peer에서 온 요청은 그쪽이 이미 검증한
+`X-Forwarded-For`를 신뢰"하도록 전환된다 — 등록 안 된 다른 모든 peer는 여전히 지금처럼
+소켓 주소로 무조건 덮어쓴다(스푸핑 방지). 신뢰는 헤더가 아니라 **접속이 실제로 그 IP에서
+왔다는 사실 자체**에 근거한다(nginx의 `set_real_ip_from`과 같은 모델) — LAN 안에서 그 IP를
+사칭하려면 그 정확한 호스트를 직접 장악해야 한다.
+
+예(iptables, 게이트웨이가 기존에 `--dport 3000`을 claude-app으로 DNAT하던 경우):
+
+```bash
+# 1) 기존 DNAT 규칙(포트 3000을 claude-app으로 직접 보내던 것)을 제거
+#    — 정확한 규칙은 환경마다 다르므로 iptables -t nat -L -n --line-numbers 으로 확인 후 삭제
+
+# 2) 같은 포트에서 이 에이전트를 직접 실행 — 이제 커널 NAT가 아니라 이 프로세스가 직접 받음
+AGENT_SOURCE_NAME=wg-gateway \
+AGENT_PUBLIC_PORT=3000 \
+AGENT_APP_HOST=192.168.1.179 \
+AGENT_APP_PORT=3000 \
+node ip-log-agent.mjs
+```
+
+claude-app 쪽(`claude-app-access-agent.service`)에는:
+
+```
+Environment=AGENT_TRUSTED_UPSTREAM_IPS=<게이트웨이의 LAN IP>
+```
+
+를 추가한다.
+
 ### 신뢰 경계 (반드시 읽을 것)
 
 - 프록시된 실제 트래픽과 ingest 보고(그 안의 credential 포함) 모두 **평문 HTTP**로

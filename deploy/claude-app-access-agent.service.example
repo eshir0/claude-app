@@ -21,6 +21,14 @@
 # AGENT_SOURCE_NAME must match a key you added to claude-app's
 # ACCESS_LOG_INGEST_KEYS, and AGENT_INGEST_KEY must be that key's value.
 #
+# If there's a NAT/VPN gateway between the real client and claude-app that
+# must SNAT to itself (e.g. so return traffic routes back through a
+# WireGuard tunnel) — see README "중간에 NAT/VPN 게이트웨이가 하나 더 있는
+# 경우" — run this same script there too, in pure-relay mode (omit
+# AGENT_INGEST_URL/AGENT_INGEST_KEY entirely), and add that gateway's LAN IP
+# to claude-app's own agent config here:
+# Environment=AGENT_TRUSTED_UPSTREAM_IPS=<gateway's LAN IP>
+#
 # Logs: journalctl --user -u claude-app-access-agent -f
 
 [Unit]

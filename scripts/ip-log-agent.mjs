@@ -5,25 +5,39 @@
 // dashboard's /access-log page — copy this one file, no repo/deps needed.
 //
 // Required env:
-//   AGENT_SOURCE_NAME    label reported for every request this instance sees,
-//                        e.g. "claude-app" — must match a key in the central
-//                        dashboard's ACCESS_LOG_INGEST_KEYS.
-//   AGENT_INGEST_URL     the central dashboard's ingest endpoint. This
-//                        instance's own service (claude-app itself) can use
-//                        the loopback address, e.g.
-//                        http://127.0.0.1:3001/api/access-log/ingest — a
-//                        REMOTE guest must use the dashboard's LAN address
-//                        on its PUBLIC agent port instead, e.g.
+//   AGENT_SOURCE_NAME    identifies this instance in its own log lines —
+//                        must also match a key in the central dashboard's
+//                        ACCESS_LOG_INGEST_KEYS if AGENT_INGEST_URL/KEY are
+//                        set (see below).
+// Optional env:
+//   AGENT_INGEST_URL / AGENT_INGEST_KEY   report every request to the
+//                        central dashboard's ingest API — omit BOTH to run
+//                        in pure-relay mode (proxy + trusted-IP forwarding
+//                        only, no self-reporting; useful for an
+//                        intermediate NAT/VPN hop that just needs to hand
+//                        the real client IP onward, not show up in
+//                        /access-log itself). This instance's own service
+//                        (claude-app itself) can use the loopback address,
+//                        e.g. http://127.0.0.1:3001/api/access-log/ingest —
+//                        a REMOTE guest must use the dashboard's LAN
+//                        address on its PUBLIC agent port instead, e.g.
 //                        http://<claude-app LAN IP>:3000/api/access-log/ingest
 //                        (127.0.0.1 only resolves on the dashboard's own box).
-//   AGENT_INGEST_KEY     this source's own credential (per-source, not a
-//                        secret shared across every server).
-// Optional env:
 //   AGENT_PUBLIC_PORT       port this agent listens on (default 3000)
 //   AGENT_APP_HOST          the real local service to forward to (default 127.0.0.1)
 //   AGENT_APP_PORT          (default 3001)
 //   AGENT_SKIP_PATH_PREFIXES  comma-separated path prefixes never logged
 //                             (default "/_next/static/,/_next/image,/favicon.ico")
+//   AGENT_TRUSTED_UPSTREAM_IPS  comma-separated exact IPs of immediate
+//                             peers whose own X-Forwarded-For is trusted
+//                             instead of overwritten — only for a peer
+//                             running this same kind of relay (e.g. a
+//                             WireGuard gateway that must SNAT to itself
+//                             for return routing, losing the real client IP
+//                             at the packet level unless it hands it onward
+//                             this way). Default empty: every peer's header
+//                             is discarded, always overwritten from the raw
+//                             socket.
 //
 // The ingest path itself (derived from AGENT_INGEST_URL) is NEVER logged as
 // an access event, regardless of AGENT_SKIP_PATH_PREFIXES — otherwise a
@@ -48,8 +62,14 @@ function requireEnv(name) {
 }
 
 const SOURCE_NAME = requireEnv("AGENT_SOURCE_NAME");
-const INGEST_URL = requireEnv("AGENT_INGEST_URL");
-const INGEST_KEY = requireEnv("AGENT_INGEST_KEY");
+// Both set, or both unset (pure-relay mode) — one without the other is a
+// config mistake, not a valid partial state.
+const INGEST_URL = process.env.AGENT_INGEST_URL || null;
+const INGEST_KEY = process.env.AGENT_INGEST_KEY || null;
+if (Boolean(INGEST_URL) !== Boolean(INGEST_KEY)) {
+  console.error("[ip-log-agent] AGENT_INGEST_URL and AGENT_INGEST_KEY must be set together, or both omitted");
+  process.exit(1);
+}
 const PUBLIC_PORT = Number(process.env.AGENT_PUBLIC_PORT || 3000);
 const APP_HOST = process.env.AGENT_APP_HOST || "127.0.0.1";
 const APP_PORT = Number(process.env.AGENT_APP_PORT || 3001);
@@ -58,8 +78,33 @@ const SKIP_PREFIXES = (process.env.AGENT_SKIP_PATH_PREFIXES || "/_next/static/,/
   .map((s) => s.trim())
   .filter(Boolean);
 
-const INGEST_URL_PARSED = new URL(INGEST_URL);
-const INGEST_PATH = INGEST_URL_PARSED.pathname; // hardcoded skip, not overridable via config
+// Multi-hop NAT support: by default this agent trusts NOTHING but its own
+// raw socket — any X-Forwarded-For a client sends is discarded (see below).
+// But when this agent sits behind another hop that ALSO does its own
+// necessary source-NAT (e.g. a WireGuard gateway that must SNAT to itself
+// so return traffic routes back through the tunnel), the raw socket peer
+// this agent sees is only that gateway's own address, not the true client
+// — the true client IP already exists nowhere on the wire by the time it
+// gets here. AGENT_TRUSTED_UPSTREAM_IPS names exactly which immediate
+// peers are running the SAME kind of trusted, un-spoofable relay (their own
+// ip-log-agent.mjs instance, which — like this one by default — always
+// overwrites X-Forwarded-For from ITS OWN raw socket) — only for a request
+// whose immediate peer is in this list is the incoming X-Forwarded-For
+// value trusted instead of overwritten. Trust here is anchored to network
+// position (the literal source IP of the TCP connection), the same model
+// nginx's realip module and similar reverse proxies use — not to anything
+// a client can set in a header.
+const TRUSTED_UPSTREAM_IPS = new Set(
+  (process.env.AGENT_TRUSTED_UPSTREAM_IPS || "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean),
+);
+
+const INGEST_URL_PARSED = INGEST_URL ? new URL(INGEST_URL) : null;
+// hardcoded skip, not overridable via config — null (pure-relay mode) means
+// there's no ingest path on this instance at all, nothing to ever exclude.
+const INGEST_PATH = INGEST_URL_PARSED ? INGEST_URL_PARSED.pathname : null;
 const UPSTREAM_TIMEOUT_MS = 30_000;
 const REPORT_TIMEOUT_MS = 5_000;
 
@@ -119,6 +164,7 @@ function canonicalizeIp(raw) {
 // ---------------------------------------------------------------------------
 
 function reportEntry(entry) {
+  if (!INGEST_URL_PARSED) return; // pure-relay mode: no ingest configured
   let body;
   try {
     body = JSON.stringify(entry);
@@ -162,7 +208,22 @@ function shouldSkipLogging(pathname) {
 
 const server = createServer((clientReq, clientRes) => {
   const remoteAddress = clientReq.socket.remoteAddress || "";
-  const canonicalIp = canonicalizeIp(remoteAddress);
+  const peerIp = canonicalizeIp(remoteAddress);
+
+  // Default: the real client is whoever this process's own socket sees —
+  // never a client-sent header. The one exception is a request whose
+  // immediate peer is a configured trusted upstream (see
+  // AGENT_TRUSTED_UPSTREAM_IPS above), in which case that upstream's own
+  // already-correct X-Forwarded-For is used instead, since the peer we'd
+  // otherwise log is just that upstream's own address, not the real client.
+  let clientIp = peerIp;
+  if (peerIp && TRUSTED_UPSTREAM_IPS.has(peerIp)) {
+    const incomingXff = clientReq.headers["x-forwarded-for"];
+    if (incomingXff) {
+      const claimed = canonicalizeIp(String(incomingXff).split(",")[0].trim());
+      if (claimed) clientIp = claimed;
+    }
+  }
 
   let pathname;
   try {
@@ -171,12 +232,13 @@ const server = createServer((clientReq, clientRes) => {
     pathname = clientReq.url;
   }
 
-  // Never trust a client-sent forwarding header — overwrite unconditionally
-  // with what this process itself observed on the raw socket.
+  // Never trust a client-sent forwarding header as-is — overwrite with
+  // clientIp, which is either this process's own raw socket view or (only
+  // for a configured trusted upstream) that upstream's own verified value.
   const forwardHeaders = { ...clientReq.headers };
   delete forwardHeaders["x-forwarded-for"];
   delete forwardHeaders["x-real-ip"];
-  forwardHeaders["x-forwarded-for"] = canonicalIp || remoteAddress;
+  forwardHeaders["x-forwarded-for"] = clientIp || remoteAddress;
   forwardHeaders["host"] = `${APP_HOST}:${APP_PORT}`;
 
   const upstreamReq = httpRequest(
@@ -216,11 +278,11 @@ const server = createServer((clientReq, clientRes) => {
 
   clientReq.pipe(upstreamReq);
 
-  if (canonicalIp) {
+  if (clientIp) {
     if (!shouldSkipLogging(pathname)) {
       reportEntry({
         source: SOURCE_NAME,
-        ip: canonicalIp,
+        ip: clientIp,
         method: clientReq.method,
         path: pathname,
         userAgent: clientReq.headers["user-agent"],
@@ -228,7 +290,7 @@ const server = createServer((clientReq, clientRes) => {
     }
   } else {
     console.error(
-      `[ip-log-agent] could not canonicalize remote address "${remoteAddress}" — logging skipped for this request only, proxying continues`,
+      `[ip-log-agent] could not determine a client ip for remote address "${remoteAddress}" — logging skipped for this request only, proxying continues`,
     );
   }
 });
@@ -239,6 +301,7 @@ server.on("clientError", (err, socket) => {
 
 server.listen(PUBLIC_PORT, "0.0.0.0", () => {
   console.log(
-    `[ip-log-agent] source="${SOURCE_NAME}" listening on 0.0.0.0:${PUBLIC_PORT} -> http://${APP_HOST}:${APP_PORT}, reporting to ${INGEST_URL}`,
+    `[ip-log-agent] source="${SOURCE_NAME}" listening on 0.0.0.0:${PUBLIC_PORT} -> http://${APP_HOST}:${APP_PORT}, ` +
+      (INGEST_URL ? `reporting to ${INGEST_URL}` : "pure-relay mode (no ingest configured)"),
   );
 });
