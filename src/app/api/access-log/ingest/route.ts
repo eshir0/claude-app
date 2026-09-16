@@ -1,7 +1,12 @@
 import { NextResponse } from "next/server";
 import { createHash, timingSafeEqual } from "node:crypto";
 import { jsonError } from "@/lib/api-helpers";
-import { ingestPayloadSchema, MAX_INGEST_BODY_BYTES, canonicalizeIp } from "@/modules/access-log/logic";
+import {
+  ingestPayloadSchema,
+  MAX_INGEST_BODY_BYTES,
+  canonicalizeIp,
+  isGeoIpEligiblePublicAddress,
+} from "@/modules/access-log/logic";
 import { recordAccessLogEntry } from "@/modules/access-log/service";
 
 // Server-to-server ingestion from this app's own local ip-log-agent.mjs and
@@ -98,6 +103,17 @@ export async function POST(req: Request) {
   const canonicalIp = canonicalizeIp(result.data.ip);
   if (!canonicalIp) {
     return jsonError(400, "INVALID_BODY", "Malformed payload", { ip: ["not a valid IP address"] });
+  }
+
+  // This log is meant to answer "who connected from outside" — a private/
+  // loopback/reserved address (an internal hop's own address when a chain
+  // of trusted-upstream relays isn't fully wired up yet, a local curl test,
+  // etc.) is never a real external visitor, so it's never stored at all,
+  // not even as a placeholder. Reuses the same public-unicast classification
+  // GeoIP eligibility already needed — the criterion ("is this an ordinary
+  // public client address") is identical for both purposes here.
+  if (!isGeoIpEligiblePublicAddress(canonicalIp)) {
+    return new NextResponse(null, { status: 204 });
   }
 
   await recordAccessLogEntry({
