@@ -206,24 +206,38 @@ function shouldSkipLogging(pathname) {
 // Reverse proxy
 // ---------------------------------------------------------------------------
 
-const server = createServer((clientReq, clientRes) => {
-  const remoteAddress = clientReq.socket.remoteAddress || "";
+/**
+ * Shared by both the normal request handler and the WebSocket/Upgrade
+ * handler below: resolves the effective client IP for a connection (raw
+ * socket peer, or a trusted upstream's already-verified X-Forwarded-For —
+ * see AGENT_TRUSTED_UPSTREAM_IPS above) and builds the header set to send
+ * upstream, with X-Forwarded-For always set to that resolved value and
+ * never left as whatever the client originally sent.
+ */
+function resolveForwarding(req) {
+  const remoteAddress = req.socket.remoteAddress || "";
   const peerIp = canonicalizeIp(remoteAddress);
 
-  // Default: the real client is whoever this process's own socket sees —
-  // never a client-sent header. The one exception is a request whose
-  // immediate peer is a configured trusted upstream (see
-  // AGENT_TRUSTED_UPSTREAM_IPS above), in which case that upstream's own
-  // already-correct X-Forwarded-For is used instead, since the peer we'd
-  // otherwise log is just that upstream's own address, not the real client.
   let clientIp = peerIp;
   if (peerIp && TRUSTED_UPSTREAM_IPS.has(peerIp)) {
-    const incomingXff = clientReq.headers["x-forwarded-for"];
+    const incomingXff = req.headers["x-forwarded-for"];
     if (incomingXff) {
       const claimed = canonicalizeIp(String(incomingXff).split(",")[0].trim());
       if (claimed) clientIp = claimed;
     }
   }
+
+  const forwardHeaders = { ...req.headers };
+  delete forwardHeaders["x-forwarded-for"];
+  delete forwardHeaders["x-real-ip"];
+  forwardHeaders["x-forwarded-for"] = clientIp || remoteAddress;
+  forwardHeaders["host"] = `${APP_HOST}:${APP_PORT}`;
+
+  return { remoteAddress, clientIp, forwardHeaders };
+}
+
+const server = createServer((clientReq, clientRes) => {
+  const { remoteAddress, clientIp, forwardHeaders } = resolveForwarding(clientReq);
 
   let pathname;
   try {
@@ -231,15 +245,6 @@ const server = createServer((clientReq, clientRes) => {
   } catch {
     pathname = clientReq.url;
   }
-
-  // Never trust a client-sent forwarding header as-is — overwrite with
-  // clientIp, which is either this process's own raw socket view or (only
-  // for a configured trusted upstream) that upstream's own verified value.
-  const forwardHeaders = { ...clientReq.headers };
-  delete forwardHeaders["x-forwarded-for"];
-  delete forwardHeaders["x-real-ip"];
-  forwardHeaders["x-forwarded-for"] = clientIp || remoteAddress;
-  forwardHeaders["host"] = `${APP_HOST}:${APP_PORT}`;
 
   const upstreamReq = httpRequest(
     {
@@ -297,6 +302,77 @@ const server = createServer((clientReq, clientRes) => {
 
 server.on("clientError", (err, socket) => {
   if (!socket.destroyed) socket.end("HTTP/1.1 400 Bad Request\r\n\r\n");
+});
+
+// WebSocket / other Upgrade support. Node delivers these on a separate
+// "upgrade" event — the normal request handler above never sees them at
+// all. Not every backend needs this (this app itself has none), but a
+// backend that does (confirmed necessary in practice: a WebSocket-using
+// dashboard proxied through this agent got "socket hang up" without it)
+// would otherwise silently break with no explanation. Once the upstream
+// itself replies 101, the two raw sockets are spliced together directly —
+// neither side is HTTP anymore past that point.
+server.on("upgrade", (clientReq, clientSocket, head) => {
+  const { remoteAddress, clientIp, forwardHeaders } = resolveForwarding(clientReq);
+
+  let pathname;
+  try {
+    pathname = new URL(clientReq.url, `http://${APP_HOST}`).pathname;
+  } catch {
+    pathname = clientReq.url;
+  }
+
+  const upstreamReq = httpRequest({
+    hostname: APP_HOST,
+    port: APP_PORT,
+    path: clientReq.url,
+    method: clientReq.method,
+    headers: forwardHeaders,
+    timeout: UPSTREAM_TIMEOUT_MS,
+  });
+
+  upstreamReq.on("upgrade", (upstreamRes, upstreamSocket, upstreamHead) => {
+    const statusLine = `HTTP/1.1 ${upstreamRes.statusCode} ${upstreamRes.statusMessage || "Switching Protocols"}`;
+    const headerLines = Object.entries(upstreamRes.headers).flatMap(([key, value]) =>
+      Array.isArray(value) ? value.map((v) => `${key}: ${v}`) : [`${key}: ${value}`],
+    );
+    clientSocket.write(`${statusLine}\r\n${headerLines.join("\r\n")}\r\n\r\n`);
+
+    if (upstreamHead && upstreamHead.length) upstreamSocket.unshift(upstreamHead);
+    if (head && head.length) clientSocket.unshift(head);
+
+    upstreamSocket.pipe(clientSocket);
+    clientSocket.pipe(upstreamSocket);
+    upstreamSocket.on("error", () => clientSocket.destroy());
+    clientSocket.on("error", () => upstreamSocket.destroy());
+  });
+
+  upstreamReq.on("timeout", () => {
+    upstreamReq.destroy(new Error("upstream upgrade request timed out"));
+  });
+  upstreamReq.on("error", (err) => {
+    console.error("[ip-log-agent] upgrade upstream error:", err.message);
+    clientSocket.destroy();
+  });
+  clientSocket.on("error", () => upstreamReq.destroy());
+
+  upstreamReq.end();
+
+  if (clientIp) {
+    if (!shouldSkipLogging(pathname)) {
+      reportEntry({
+        source: SOURCE_NAME,
+        ip: clientIp,
+        method: clientReq.method,
+        path: pathname,
+        userAgent: clientReq.headers["user-agent"],
+      });
+    }
+  } else {
+    console.error(
+      `[ip-log-agent] could not determine a client ip for remote address "${remoteAddress}" — logging skipped for this upgrade request only, proxying continues`,
+    );
+  }
 });
 
 server.listen(PUBLIC_PORT, "0.0.0.0", () => {
