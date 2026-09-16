@@ -125,6 +125,17 @@ export async function resetOversizedIpHistories(threshold = MAX_ENTRIES_PER_IP):
 }
 
 /**
+ * Deletes every AccessLogEntry row for one ip (manual "forget this IP"
+ * action from the dashboard) plus its IpGeoCache row, so it disappears
+ * immediately instead of lingering as an orphan until the next
+ * deleteOrphanedGeoCache maintenance tick.
+ */
+export async function deleteIpHistory(ip: string): Promise<void> {
+  await prisma.accessLogEntry.deleteMany({ where: { ip } });
+  await prisma.ipGeoCache.deleteMany({ where: { ip } });
+}
+
+/**
  * Deletes IpGeoCache rows for IPs with no remaining AccessLogEntry row —
  * run right after pruning, so a resolved location doesn't keep consuming
  * GeoIP quota (or DB space) for an IP the dashboard no longer shows at all.

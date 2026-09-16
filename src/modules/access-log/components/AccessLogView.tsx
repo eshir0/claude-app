@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { RefreshCw, ChevronDown, ChevronRight } from "lucide-react";
+import { RefreshCw, ChevronDown, ChevronRight, Trash2 } from "lucide-react";
 import type { IpSummaryDTO, AccessLogEntryDTO } from "../types";
 
 interface AccessLogViewProps {
@@ -12,6 +12,24 @@ export function AccessLogView({ initialSummaries }: AccessLogViewProps) {
   const [summaries, setSummaries] = useState(initialSummaries);
   const [refreshing, setRefreshing] = useState(false);
   const [expandedIp, setExpandedIp] = useState<string | null>(null);
+  const [deletingIp, setDeletingIp] = useState<string | null>(null);
+
+  async function handleDelete(ip: string) {
+    if (deletingIp) return;
+    if (!window.confirm(`${ip} 접속 기록을 삭제할까요?`)) return;
+    setDeletingIp(ip);
+    try {
+      const res = await fetch(`/api/access-log/entries?ip=${encodeURIComponent(ip)}`, { method: "DELETE" });
+      if (res.ok) {
+        setSummaries((prev) => prev.filter((s) => s.ip !== ip));
+        if (expandedIp === ip) setExpandedIp(null);
+      }
+    } catch {
+      // Transient network error: leave the row as-is, user can retry.
+    } finally {
+      setDeletingIp(null);
+    }
+  }
 
   async function handleRefresh() {
     if (refreshing) return;
@@ -60,6 +78,7 @@ export function AccessLogView({ initialSummaries }: AccessLogViewProps) {
                 <th className="px-3 py-2 font-medium text-right">횟수</th>
                 <th className="px-3 py-2 font-medium">최초 접속</th>
                 <th className="px-3 py-2 font-medium">최근 접속</th>
+                <th className="w-8 px-3 py-2" />
               </tr>
             </thead>
             <tbody>
@@ -68,7 +87,9 @@ export function AccessLogView({ initialSummaries }: AccessLogViewProps) {
                   key={s.ip}
                   summary={s}
                   expanded={expandedIp === s.ip}
+                  deleting={deletingIp === s.ip}
                   onToggle={() => setExpandedIp(expandedIp === s.ip ? null : s.ip)}
+                  onDelete={() => handleDelete(s.ip)}
                 />
               ))}
             </tbody>
@@ -89,11 +110,15 @@ function locationLabel(country: string | null, city: string | null): string {
 function IpSummaryRow({
   summary,
   expanded,
+  deleting,
   onToggle,
+  onDelete,
 }: {
   summary: IpSummaryDTO;
   expanded: boolean;
+  deleting: boolean;
   onToggle: () => void;
+  onDelete: () => void;
 }) {
   return (
     <>
@@ -110,10 +135,25 @@ function IpSummaryRow({
         <td className="px-3 py-2 text-right tabular-nums">{summary.hitCount}</td>
         <td className="px-3 py-2 text-zinc-500">{new Date(summary.firstSeen).toLocaleString()}</td>
         <td className="px-3 py-2 text-zinc-500">{new Date(summary.lastSeen).toLocaleString()}</td>
+        <td className="px-3 py-2 text-right">
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onDelete();
+            }}
+            disabled={deleting}
+            title={`${summary.ip} 기록 삭제`}
+            aria-label={`${summary.ip} 기록 삭제`}
+            className="rounded-md p-1 text-zinc-400 hover:bg-red-50 hover:text-red-500 disabled:opacity-50 dark:hover:bg-red-950"
+          >
+            <Trash2 size={13} />
+          </button>
+        </td>
       </tr>
       {expanded && (
         <tr>
-          <td colSpan={7} className="bg-zinc-50 px-3 py-2 dark:bg-zinc-900">
+          <td colSpan={8} className="bg-zinc-50 px-3 py-2 dark:bg-zinc-900">
             <IpEntryHistory ip={summary.ip} />
           </td>
         </tr>
