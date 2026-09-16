@@ -234,8 +234,20 @@ function readProxyHeader(socket, callback) {
 // Relay
 // ---------------------------------------------------------------------------
 
+// Some routers/NAT devices (home routers, carrier-grade NAT) silently drop
+// a TCP connection's state after enough quiet time, with no FIN/RST either
+// side ever sees — invisible to us until the next write into a half-dead
+// connection fails. TCP keep-alive probes traffic on an otherwise-idle
+// connection specifically to keep that state alive end-to-end. Cheap
+// insurance for a long-lived session (hours, e.g. a game connection) that
+// may go quiet between app-level packets; harmless for a short-lived one.
+const KEEPALIVE_DELAY_MS = 30_000;
+
 function relay(clientSocket, remoteAddress, clientIp, leftover) {
+  clientSocket.setKeepAlive(true, KEEPALIVE_DELAY_MS);
+
   const upstream = connect(TARGET_PORT, TARGET_HOST, () => {
+    upstream.setKeepAlive(true, KEEPALIVE_DELAY_MS);
     if (EMIT_PROXY_PROTOCOL) writeProxyHeader(upstream, clientIp || remoteAddress);
     if (leftover && leftover.length) upstream.write(leftover);
     clientSocket.pipe(upstream);
