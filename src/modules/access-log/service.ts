@@ -40,17 +40,27 @@ export async function recordAccessLogEntry(input: RecordAccessLogEntryInput): Pr
 /**
  * Three separate queries merged in JS (see logic.ts#mergeIpSummaries) —
  * SQLite/Prisma groupBy can't join across models in one call.
+ *
+ * `minHitCount` (used by the home-page widget to only surface IPs with
+ * 100+ hits there — see AccessLogHomeWidget) can't be applied as part of
+ * the DB `take`, since the cutoff is on the aggregated count, not on
+ * whatever ordering produced the top `limit` rows. When set, the groupBy
+ * runs unbounded instead, is filtered by count, then trimmed to `limit` —
+ * fine at this dashboard's scale (a home server's own access log, not an
+ * internet-scale table).
  */
-export async function getIpSummaries(limit = 50): Promise<IpSummaryDTO[]> {
+export async function getIpSummaries(limit = 50, minHitCount = 0): Promise<IpSummaryDTO[]> {
   const counts = await prisma.accessLogEntry.groupBy({
     by: ["ip"],
     _count: { _all: true },
     _min: { at: true },
     _max: { at: true },
     orderBy: { _max: { at: "desc" } },
-    take: limit,
+    ...(minHitCount > 0 ? {} : { take: limit }),
   });
-  const ips = counts.map((c) => c.ip);
+  const filteredCounts =
+    minHitCount > 0 ? counts.filter((c) => c._count._all >= minHitCount).slice(0, limit) : counts;
+  const ips = filteredCounts.map((c) => c.ip);
   if (ips.length === 0) return [];
 
   const [sourceRows, geoRows] = await Promise.all([
@@ -59,7 +69,7 @@ export async function getIpSummaries(limit = 50): Promise<IpSummaryDTO[]> {
   ]);
 
   const merged = mergeIpSummaries(
-    counts.map((c) => ({
+    filteredCounts.map((c) => ({
       ip: c.ip,
       hitCount: c._count._all,
       firstSeen: c._min.at!,

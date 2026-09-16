@@ -6,9 +6,16 @@ import type { IpSummaryDTO, AccessLogEntryDTO } from "../types";
 
 interface AccessLogViewProps {
   initialSummaries: IpSummaryDTO[];
+  /** Only IPs with at least this many hits are fetched/shown — used by the
+   * home-page widget so low-traffic IPs stay out of the home screen and
+   * only appear on the full /access-log page. 0 (default) shows everything. */
+  minHitCount?: number;
+  /** Optional caption shown next to the unique-IP count, e.g. explaining
+   * why some IPs are missing here (see AccessLogHomeWidget). */
+  note?: string;
 }
 
-export function AccessLogView({ initialSummaries }: AccessLogViewProps) {
+export function AccessLogView({ initialSummaries, minHitCount = 0, note }: AccessLogViewProps) {
   const [summaries, setSummaries] = useState(initialSummaries);
   const [refreshing, setRefreshing] = useState(false);
   const [expandedIp, setExpandedIp] = useState<string | null>(null);
@@ -35,7 +42,9 @@ export function AccessLogView({ initialSummaries }: AccessLogViewProps) {
     if (refreshing) return;
     setRefreshing(true);
     try {
-      const res = await fetch("/api/access-log/summary");
+      const url =
+        minHitCount > 0 ? `/api/access-log/summary?minHitCount=${minHitCount}` : "/api/access-log/summary";
+      const res = await fetch(url);
       if (res.ok) setSummaries(await res.json());
     } catch {
       // Transient network error: keep showing the last known state.
@@ -49,6 +58,7 @@ export function AccessLogView({ initialSummaries }: AccessLogViewProps) {
       <div className="flex items-center justify-between">
         <span className="text-xs text-zinc-500 dark:text-zinc-400">
           {summaries.length === 0 ? "아직 기록된 접속이 없습니다" : `고유 IP ${summaries.length}개`}
+          {note && <span className="ml-2 text-zinc-400 dark:text-zinc-500">· {note}</span>}
         </span>
         <button
           type="button"
