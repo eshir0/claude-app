@@ -1,6 +1,9 @@
 import "server-only";
 import https from "node:https";
 import type { TLSSocket } from "node:tls";
+import { isTransientNetworkError } from "./errors";
+
+export { isTransientNetworkError };
 
 // Proxmox VE's web UI/API normally runs on a self-signed certificate (no
 // public CA), so this deliberately does NOT do normal CA-chain verification
@@ -42,12 +45,40 @@ export function isProxmoxConfigured(): boolean {
   );
 }
 
+const RETRY_ATTEMPTS = 3;
+const RETRY_DELAY_MS = 300;
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 /**
  * GETs `{PROXMOX_URL}/api2/json{path}` with API token auth and certificate
  * pinning, and returns the response's `data` field parsed as T. Proxmox's
  * API only ever wraps successful responses as `{ "data": ... }`.
+ *
+ * Retries a transient connection-level failure (see isTransientNetworkError)
+ * a couple of times with a short delay — pveproxy's own worker-recycling
+ * gap is normally well under RETRY_DELAY_MS, so this absorbs it rather than
+ * surfacing a spurious failure for what is, functionally, still-healthy
+ * infrastructure. Never retries a non-transient error (e.g. the
+ * fingerprint-mismatch security check below) — that must fail immediately.
  */
-export function proxmoxRequest<T>(path: string): Promise<T> {
+export async function proxmoxRequest<T>(path: string): Promise<T> {
+  let lastErr: unknown;
+  for (let attempt = 1; attempt <= RETRY_ATTEMPTS; attempt++) {
+    try {
+      return await attemptProxmoxRequest<T>(path);
+    } catch (err) {
+      lastErr = err;
+      if (attempt === RETRY_ATTEMPTS || !isTransientNetworkError(err)) throw err;
+      await sleep(RETRY_DELAY_MS);
+    }
+  }
+  throw lastErr;
+}
+
+function attemptProxmoxRequest<T>(path: string): Promise<T> {
   const baseUrl = requireEnv("PROXMOX_URL");
   const tokenId = requireEnv("PROXMOX_TOKEN_ID");
   const tokenSecret = requireEnv("PROXMOX_TOKEN_SECRET");

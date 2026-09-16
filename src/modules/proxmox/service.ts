@@ -90,11 +90,15 @@ export async function getProxmoxOverview(): Promise<ProxmoxOverview> {
       uptimeSeconds: status.uptime,
     });
 
-    const [qemu, lxc, storage] = await Promise.all([
-      proxmoxRequest<RawGuest[]>(`/nodes/${n.node}/qemu`),
-      proxmoxRequest<RawGuest[]>(`/nodes/${n.node}/lxc`),
-      proxmoxRequest<RawStorage[]>(`/nodes/${n.node}/storage`),
-    ]);
+    // Sequential, not Promise.all — each proxmoxRequest opens a fresh TLS
+    // connection by design (see client.ts's comment on why it never reuses
+    // one), and pveproxy's own worker pool is small enough that firing
+    // several brand-new handshakes at once measurably increased connection
+    // failures in practice. A slightly slower refresh is a fine trade for
+    // not competing with itself for pveproxy's limited workers.
+    const qemu = await proxmoxRequest<RawGuest[]>(`/nodes/${n.node}/qemu`);
+    const lxc = await proxmoxRequest<RawGuest[]>(`/nodes/${n.node}/lxc`);
+    const storage = await proxmoxRequest<RawStorage[]>(`/nodes/${n.node}/storage`);
     guests.push(...qemu.map((g) => mapGuest(g, "qemu")));
     guests.push(...lxc.map((g) => mapGuest(g, "lxc")));
     for (const s of storage) {
