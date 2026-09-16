@@ -9,6 +9,7 @@ import type { IpSummaryDTO, AccessLogEntryDTO } from "./types";
 const RESOLVED_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 const FAILED_BACKOFF_MS = 60 * 60 * 1000;
 const RETENTION_MS = 90 * 24 * 60 * 60 * 1000;
+const MAX_ENTRIES_PER_IP = 10_000;
 
 export interface RecordAccessLogEntryInput {
   source: string;
@@ -100,6 +101,27 @@ export async function pruneOldAccessLogEntries(now: Date = new Date()): Promise<
   const cutoff = new Date(now.getTime() - RETENTION_MS);
   const result = await prisma.accessLogEntry.deleteMany({ where: { at: { lt: cutoff } } });
   return result.count;
+}
+
+/**
+ * For any ip that has accumulated more than MAX_ENTRIES_PER_IP rows (a
+ * tightly-polled endpoint can otherwise reach that well within the 90-day
+ * retention window), keeps only its single most recent row and deletes the
+ * rest — hitCount, firstSeen, and lastSeen are all derived from the row set
+ * (see getIpSummaries), so this is what resets all three at once. Returns
+ * the ips that were reset, for observability.
+ */
+export async function resetOversizedIpHistories(threshold = MAX_ENTRIES_PER_IP): Promise<string[]> {
+  const counts = await prisma.accessLogEntry.groupBy({ by: ["ip"], _count: { _all: true } });
+  const oversizedIps = counts.filter((c) => c._count._all > threshold).map((c) => c.ip);
+
+  for (const ip of oversizedIps) {
+    const latest = await prisma.accessLogEntry.findFirst({ where: { ip }, orderBy: { at: "desc" } });
+    if (!latest) continue;
+    await prisma.accessLogEntry.deleteMany({ where: { ip, id: { not: latest.id } } });
+  }
+
+  return oversizedIps;
 }
 
 /**

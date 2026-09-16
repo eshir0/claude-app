@@ -4,6 +4,7 @@ import {
   getGeoResolutionCandidates,
   upsertGeoCache,
   pruneOldAccessLogEntries,
+  resetOversizedIpHistories,
   deleteOrphanedGeoCache,
 } from "../service";
 import { isGeoIpEligiblePublicAddress } from "../logic";
@@ -19,6 +20,8 @@ let providerCooldownUntil = 0;
 
 export interface AccessLogMaintenanceResult {
   prunedEntries: number;
+  /** ips reset back to a single row for having passed MAX_ENTRIES_PER_IP. */
+  resetIps: string[];
   deletedOrphanCacheRows: number;
   /** External provider lookups actually made this tick (never counts a
    * locally-classified NOT_APPLICABLE, which never touches the network). */
@@ -29,17 +32,19 @@ export interface AccessLogMaintenanceResult {
 /**
  * Single entry point the background scheduler calls (see
  * instrumentation-node.ts#startAccessLogGeoResolver): prune old log rows,
- * clean up orphaned geo-cache rows, then (unless the provider is in a
- * whole-provider cooldown from a prior 429) resolve up to
- * MAX_GEO_LOOKUPS_PER_TICK candidate IPs. Never throws — errors from a
- * single IP's lookup are recorded as FAILED and the loop continues.
+ * reset any ip that's piled up past MAX_ENTRIES_PER_IP, clean up orphaned
+ * geo-cache rows, then (unless the provider is in a whole-provider cooldown
+ * from a prior 429) resolve up to MAX_GEO_LOOKUPS_PER_TICK candidate IPs.
+ * Never throws — errors from a single IP's lookup are recorded as FAILED
+ * and the loop continues.
  */
 export async function runAccessLogMaintenance(now: Date = new Date()): Promise<AccessLogMaintenanceResult> {
   const prunedEntries = await pruneOldAccessLogEntries(now);
+  const resetIps = await resetOversizedIpHistories();
   const deletedOrphanCacheRows = await deleteOrphanedGeoCache();
 
   if (now.getTime() < providerCooldownUntil) {
-    return { prunedEntries, deletedOrphanCacheRows, lookupsAttempted: 0, inProviderCooldown: true };
+    return { prunedEntries, resetIps, deletedOrphanCacheRows, lookupsAttempted: 0, inProviderCooldown: true };
   }
 
   const candidates = await getGeoResolutionCandidates(MAX_GEO_LOOKUPS_PER_TICK, now);
@@ -77,5 +82,5 @@ export async function runAccessLogMaintenance(now: Date = new Date()): Promise<A
     }
   }
 
-  return { prunedEntries, deletedOrphanCacheRows, lookupsAttempted, inProviderCooldown: false };
+  return { prunedEntries, resetIps, deletedOrphanCacheRows, lookupsAttempted, inProviderCooldown: false };
 }
