@@ -190,6 +190,16 @@ function readProxyHeader(socket, callback) {
     clearTimeout(timer);
     socket.removeListener("data", onData);
     socket.removeListener("error", onError);
+    // Attaching a "data" listener above put the socket into flowing mode;
+    // removing the listener does NOT undo that — without this pause, any
+    // bytes arriving between now and whenever relay() below attaches its
+    // own pipe (only once the outbound connection to the next hop
+    // finishes, which is not instant) would be delivered to no one and
+    // silently dropped, corrupting whatever protocol is layered on top
+    // (a lost byte partway into a TLS ClientHello reliably breaks the
+    // whole handshake). Pausing here queues them instead; relay()'s
+    // eventual .pipe() resumes the flow from exactly where this left off.
+    socket.pause();
     callback(err, clientIp, leftover);
   }
 
