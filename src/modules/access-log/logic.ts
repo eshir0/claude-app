@@ -206,6 +206,14 @@ export function isGeoIpEligiblePublicAddress(canonicalIp: string): boolean {
   return false;
 }
 
+// Suspicious-path heuristic lives in ./suspicious-path.ts, not here — that
+// file has zero Node-builtin imports so "use client" components (see
+// AccessLogView.tsx) can import isSuspiciousPath directly without pulling
+// this file's `node:net` dependency into the browser bundle. Re-exported
+// here too so existing server-side callers (service.ts) and tests can keep
+// importing everything from one place.
+export { isSuspiciousPath } from "./suspicious-path.ts";
+
 // ---------------------------------------------------------------------------
 // Ingest payload validation
 // ---------------------------------------------------------------------------
@@ -263,12 +271,14 @@ export interface IpSummary {
   hitCount: number;
   firstSeen: Date;
   lastSeen: Date;
+  isSuspicious: boolean;
 }
 
 export function mergeIpSummaries(
   counts: IpSummaryCounts[],
   sourceRows: IpSourceRow[],
   geoRows: IpGeoRow[],
+  suspiciousIps: string[] = [],
 ): IpSummary[] {
   const sourcesByIp = new Map<string, Set<string>>();
   for (const row of sourceRows) {
@@ -277,6 +287,7 @@ export function mergeIpSummaries(
     sourcesByIp.set(row.ip, set);
   }
   const geoByIp = new Map(geoRows.map((r) => [r.ip, r]));
+  const suspiciousIpSet = new Set(suspiciousIps);
 
   return counts.map((c) => {
     const geo = geoByIp.get(c.ip);
@@ -288,6 +299,7 @@ export function mergeIpSummaries(
       hitCount: c.hitCount,
       firstSeen: c.firstSeen,
       lastSeen: c.lastSeen,
+      isSuspicious: suspiciousIpSet.has(c.ip),
     };
   });
 }

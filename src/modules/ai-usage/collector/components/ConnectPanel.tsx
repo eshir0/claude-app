@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import type { ConnectionStatusDTO } from "@/modules/ai-usage/collector/connectionService";
 import { usedToRemainingPercent } from "@/modules/ai-usage/logic";
 import type { AiUsageEntryDTO } from "@/modules/ai-usage/types";
+import { formatDateTime } from "@/lib/datetime";
 
 async function readErrorMessage(res: Response, fallback: string): Promise<string> {
   try {
@@ -157,7 +158,7 @@ export default function ConnectPanel() {
           <>
             {connected && status?.lastCheckedAt && (
               <div className="text-xs text-zinc-500">
-                마지막 확인: {new Date(status.lastCheckedAt).toLocaleString()}
+                마지막 확인: {formatDateTime(status.lastCheckedAt)}
                 {status.lastError && <span className="ml-2 text-red-600 dark:text-red-400">{status.lastError}</span>}
               </div>
             )}
@@ -225,7 +226,7 @@ export default function ConnectPanel() {
                         <span className="font-medium">{METRIC_LABELS[e.metricId] ?? e.metricId}</span>:{" "}
                         {usedToRemainingPercent(e.usagePercent)}% 남음
                         {e.resetsAt && (
-                          <span className="text-zinc-500"> · 리셋 {new Date(e.resetsAt).toLocaleString()}</span>
+                          <span className="text-zinc-500"> · 리셋 {formatDateTime(e.resetsAt)}</span>
                         )}
                       </li>
                     ))}

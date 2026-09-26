@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { usedToRemainingPercent } from "@/modules/ai-usage/logic";
 import type { AiUsageEntryDTO } from "@/modules/ai-usage/types";
+import { formatDateTime } from "@/lib/datetime";
 
 async function readErrorMessage(res: Response, fallback: string): Promise<string> {
   try {
@@ -95,7 +96,7 @@ export default function OmnirouteStatus() {
                     <span className="font-medium">{METRIC_LABELS[e.metricId] ?? e.metricId}</span>:{" "}
                     {usedToRemainingPercent(e.usagePercent)}% 남음
                     {e.resetsAt && (
-                      <span className="text-zinc-500"> · 리셋 {new Date(e.resetsAt).toLocaleString()}</span>
+                      <span className="text-zinc-500"> · 리셋 {formatDateTime(e.resetsAt)}</span>
                     )}
                   </li>
                 ))}

@@ -4,12 +4,13 @@ import type { AiUsageEntry, EntrySource } from "@/generated/prisma/client";
 import { USAGE_METRICS } from "./metrics";
 import {
   type CreateEntryInput,
-  compareEntriesNewestFirst,
   computeCardState,
   rangeToFromDate,
+  downsampleLttb,
+  CHART_MAX_POINTS,
   type ChartRange,
 } from "./logic";
-import type { AiUsageEntryDTO, CardStatesResponse } from "./types";
+import type { AiUsageEntryDTO, CardStatesResponse, ChartPointDTO } from "./types";
 
 // This is the ONLY module that touches Prisma for AI usage data. Manual
 // entry (via the API route) and the OpenAI/Codex collector both go through
@@ -92,7 +93,7 @@ export async function deleteUsageEntry(id: string): Promise<void> {
   }
 }
 
-export async function getChartData(metricId: string, range: ChartRange): Promise<AiUsageEntryDTO[]> {
+export async function getChartData(metricId: string, range: ChartRange): Promise<ChartPointDTO[]> {
   const from = rangeToFromDate(range);
   const rows = await prisma.aiUsageEntry.findMany({
     where: {
@@ -101,30 +102,45 @@ export async function getChartData(metricId: string, range: ChartRange): Promise
     },
     orderBy: [{ recordedAt: "asc" }],
   });
-  return rows.map(toDTO);
+  // The collector adds a point every few minutes, so a 30-day range was
+  // ~1,500 full rows per metric (~250KB of JSON, four requests per page
+  // view). The chart only plots recordedAt/usagePercent: send just those,
+  // and a shape-preserving subset of the real rows (see CHART_MAX_POINTS).
+  const sampled = downsampleLttb(
+    rows,
+    CHART_MAX_POINTS,
+    (r) => r.recordedAt.getTime(),
+    (r) => r.usagePercent,
+  );
+  return sampled.map((r) => ({ recordedAt: r.recordedAt.toISOString(), usagePercent: r.usagePercent }));
 }
 
 /**
- * One card state per registered metric (including UNSUPPORTED ones). Groups
- * and sorts in memory — the dataset is a single person's usage log, not a
- * multi-tenant table, so this stays cheap without a more clever query.
+ * One card state per registered metric (including UNSUPPORTED ones).
+ * computeCardState only ever looks at the newest entry, so this reads just
+ * that one row per metric (index-backed) instead of the whole history —
+ * which grows by ~170 rows/day from the collector and was being loaded in
+ * full on every card refresh. The orderBy matches compareEntriesNewestFirst
+ * (same tie-break as listUsageEntries).
  */
 export async function getCardStates(now: Date = new Date()): Promise<CardStatesResponse> {
   const numericMetricIds = USAGE_METRICS.filter((m) => m.supportsNumericInput).map((m) => m.id);
-  const rows = await prisma.aiUsageEntry.findMany({
-    where: { metricId: { in: numericMetricIds } },
-  });
-  const byMetric = new Map<string, AiUsageEntryDTO[]>();
-  for (const row of rows) {
-    const dto = toDTO(row);
-    const list = byMetric.get(dto.metricId);
-    if (list) list.push(dto);
-    else byMetric.set(dto.metricId, [dto]);
+  const latestRows = await Promise.all(
+    numericMetricIds.map((metricId) =>
+      prisma.aiUsageEntry.findFirst({
+        where: { metricId },
+        orderBy: [{ recordedAt: "desc" }, { createdAt: "desc" }, { id: "desc" }],
+      }),
+    ),
+  );
+  const latestByMetric = new Map<string, AiUsageEntryDTO>();
+  for (const row of latestRows) {
+    if (row) latestByMetric.set(row.metricId, toDTO(row));
   }
   const result: CardStatesResponse = {};
   for (const metric of USAGE_METRICS) {
-    const sorted = (byMetric.get(metric.id) ?? []).sort(compareEntriesNewestFirst);
-    result[metric.id] = computeCardState(metric.id, sorted, now);
+    const latest = latestByMetric.get(metric.id);
+    result[metric.id] = computeCardState(metric.id, latest ? [latest] : [], now);
   }
   return result;
 }

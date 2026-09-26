@@ -3,9 +3,14 @@
 import { useState } from "react";
 import { RefreshCw } from "lucide-react";
 import type { LottoCardState, LottoComboAnnotation } from "../types";
+import { Card } from "@/components/ui/Card";
+import { Panel } from "@/components/ui/Panel";
+import { IconButton } from "@/components/ui/IconButton";
 
 interface LottoViewProps {
   initialState: LottoCardState;
+  /** Panel heading (home dashboard only). */
+  title?: string;
 }
 
 /**
@@ -16,7 +21,7 @@ interface LottoViewProps {
  * never triggers a live scrape (see this module's plan doc for why a
  * user-triggered scrape button was deliberately left out).
  */
-export function LottoView({ initialState }: LottoViewProps) {
+export function LottoView({ initialState, title }: LottoViewProps) {
   const [state, setState] = useState(initialState);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -34,22 +39,24 @@ export function LottoView({ initialState }: LottoViewProps) {
   }
 
   return (
-    <div className="flex flex-col gap-3">
-      <div className="flex items-center justify-between">
-        <span className="text-xs text-zinc-500 dark:text-zinc-400">{headerText(state)}</span>
-        <button
+    <Panel
+      title={title}
+      description={headerText(state)}
+      className="h-full"
+      actions={
+        <IconButton
           type="button"
           onClick={handleRefresh}
           disabled={refreshing}
           title="지금 상태 새로고침"
           aria-label="지금 상태 새로고침"
-          className="rounded-md p-1.5 text-zinc-500 hover:bg-zinc-100 disabled:opacity-50 dark:text-zinc-400 dark:hover:bg-zinc-800"
         >
           <RefreshCw size={16} className={refreshing ? "animate-spin" : ""} />
-        </button>
-      </div>
+        </IconButton>
+      }
+    >
       {renderBody(state)}
-    </div>
+    </Panel>
   );
 }
 
@@ -67,14 +74,18 @@ function headerText(state: LottoCardState): string {
 function renderBody(state: LottoCardState) {
   if (state.kind === "NO_DATA") {
     return (
-      <div className="rounded-lg border border-zinc-200 p-4 text-sm text-zinc-400 dark:border-zinc-800 dark:text-zinc-500">
+      <Card variant="inset" className="text-sm text-text-muted">
         최초 데이터 수집 후 자동으로 생성됩니다 (서버 시작 후 최대 몇 시간 소요될 수 있음).
-      </div>
+      </Card>
     );
   }
 
+  // Sized by the panel (container query): a single column in a narrow
+  // home-page bento cell, spreading out when the panel is full-width on
+  // the lotto page. Ball size is chosen so all six fit on one line at the
+  // narrowest column width each layout allows.
   return (
-    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
+    <div className="grid grid-cols-1 gap-2 break-keep @xl:grid-cols-2 @5xl:grid-cols-5">
       {state.comboSet.combos.map((combo, i) => (
         <ComboCard key={i} combo={combo} />
       ))}
@@ -84,12 +95,12 @@ function renderBody(state: LottoCardState) {
 
 function ComboCard({ combo }: { combo: LottoComboAnnotation }) {
   return (
-    <div className="flex flex-col gap-2 rounded-lg border border-zinc-200 p-3 dark:border-zinc-800">
-      <div className="flex flex-wrap gap-1.5">
+    <Card variant="inset" className="flex flex-col gap-1.5 px-3 py-2.5">
+      <div className="flex flex-wrap gap-1">
         {combo.combo.map((n, i) => (
           <span
             key={n}
-            className="flex h-7 w-7 items-center justify-center rounded-full text-xs font-semibold text-white"
+            className="flex h-6 w-6 items-center justify-center rounded-full text-[11px] font-semibold text-white"
             style={{ backgroundColor: ballColor(n) }}
             title={combo.groups[i]}
           >
@@ -97,7 +108,7 @@ function ComboCard({ combo }: { combo: LottoComboAnnotation }) {
           </span>
         ))}
       </div>
-      <div className="flex flex-col gap-0.5 text-xs text-zinc-500 dark:text-zinc-400">
+      <div className="flex flex-col gap-0.5 text-xs text-text-muted">
         <span>
           홀{combo.oddCount}:짝{combo.evenCount} · 저{combo.lowCount}:고{combo.highCount} · 합계 {combo.sum}
         </span>
@@ -111,7 +122,7 @@ function ComboCard({ combo }: { combo: LottoComboAnnotation }) {
           <span>주목할 부분조합 없음</span>
         )}
       </div>
-    </div>
+    </Card>
   );
 }
 

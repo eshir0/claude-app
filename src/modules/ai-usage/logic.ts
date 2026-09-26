@@ -150,6 +150,63 @@ export function rangeToFromDate(range: ChartRange, now = new Date()): Date | und
   return new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
 }
 
+// Measured on real collector data (≈10 samples per 5-hour window): at 600
+// every window peak's value survives (worst loss 0.0%p); at 400 some peaks
+// dropped by 1–2%p. Also caps "all"/"90d", which otherwise grow unbounded.
+export const CHART_MAX_POINTS = 600;
+
+/**
+ * Largest-Triangle-Three-Buckets downsampling: returns at most `maxPoints`
+ * of the ORIGINAL points (never averaged/synthesized values), in original
+ * order, always keeping the first and last. Per bucket it keeps the point
+ * that forms the largest triangle with its neighbours, so spikes and
+ * reset drops survive where plain averaging would flatten them. Input must
+ * already be sorted by x ascending.
+ */
+export function downsampleLttb<T>(
+  points: readonly T[],
+  maxPoints: number,
+  x: (p: T) => number,
+  y: (p: T) => number,
+): T[] {
+  const n = points.length;
+  if (maxPoints >= n || maxPoints < 3) return points.slice();
+
+  const sampled: T[] = [points[0]];
+  const bucketSize = (n - 2) / (maxPoints - 2);
+  let prev = 0;
+  for (let i = 0; i < maxPoints - 2; i++) {
+    const nextStart = Math.floor((i + 1) * bucketSize) + 1;
+    const nextEnd = Math.min(Math.floor((i + 2) * bucketSize) + 1, n);
+    let avgX = 0;
+    let avgY = 0;
+    for (let j = nextStart; j < nextEnd; j++) {
+      avgX += x(points[j]);
+      avgY += y(points[j]);
+    }
+    avgX /= nextEnd - nextStart;
+    avgY /= nextEnd - nextStart;
+
+    const start = Math.floor(i * bucketSize) + 1;
+    const end = Math.floor((i + 1) * bucketSize) + 1;
+    const px = x(points[prev]);
+    const py = y(points[prev]);
+    let best = start;
+    let bestArea = -1;
+    for (let j = start; j < end; j++) {
+      const area = Math.abs((px - avgX) * (y(points[j]) - py) - (px - x(points[j])) * (avgY - py));
+      if (area > bestArea) {
+        bestArea = area;
+        best = j;
+      }
+    }
+    sampled.push(points[best]);
+    prev = best;
+  }
+  sampled.push(points[n - 1]);
+  return sampled;
+}
+
 /** Deterministic ordering: most recent OBSERVATION first, tie-broken so that
  * insertion order never silently decides which entry counts as "latest". */
 export function compareEntriesNewestFirst(a: AiUsageEntryDTO, b: AiUsageEntryDTO): number {

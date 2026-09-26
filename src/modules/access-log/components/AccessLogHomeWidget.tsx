@@ -7,11 +7,12 @@ import { AccessLogView } from "./AccessLogView";
 // on the full /access-log page (AccessLogWidget, unfiltered).
 const HOME_MIN_HIT_COUNT = 100;
 
-export default async function AccessLogHomeWidget() {
+export default async function AccessLogHomeWidget({ title }: { title?: string } = {}) {
   await requireSessionPage();
   const summaries = await getIpSummaries(50, HOME_MIN_HIT_COUNT);
   return (
     <AccessLogView
+      title={title}
       initialSummaries={summaries}
       minHitCount={HOME_MIN_HIT_COUNT}
       note={`횟수 ${HOME_MIN_HIT_COUNT}회 이상만 표시 · 전체는 접속 기록 페이지에서`}

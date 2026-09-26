@@ -8,8 +8,8 @@ import { CardsView } from "./CardsView";
  * Client Component — see its file comment for why a page-return alone
  * can't be trusted to reflect fresh data.
  */
-export default async function CardsWidget() {
+export default async function CardsWidget({ title }: { title?: string } = {}) {
   await requireSessionPage();
   const cards = await getCardStates();
-  return <CardsView initialStates={cards} />;
+  return <CardsView initialStates={cards} title={title} />;
 }

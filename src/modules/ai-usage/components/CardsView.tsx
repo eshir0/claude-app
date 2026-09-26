@@ -6,10 +6,15 @@ import { RefreshCw } from "lucide-react";
 import { USAGE_METRICS } from "../metrics";
 import { usedToRemainingPercent, formatResetCountdown, usageSeverity, type UsageSeverity } from "../logic";
 import type { CardStatesResponse, UsageCardState } from "../types";
+import { Card } from "@/components/ui/Card";
+import { Panel } from "@/components/ui/Panel";
+import { ProgressBar } from "@/components/ui/ProgressBar";
+import { IconButton } from "@/components/ui/IconButton";
+import { formatDateTime } from "@/lib/datetime";
 
-// Colors read as "severity", not "brand accent" — kept apart from the rest
-// of the app's zinc-only palette on purpose, same idea as the reference
-// quota dashboard this was modeled after.
+// Colors read as "severity", not "brand accent" — kept apart from the
+// app's accent color on purpose, same idea as the reference quota
+// dashboard this was modeled after. Never replaced by the violet accent.
 const SEVERITY_STYLES: Record<UsageSeverity, { border: string; dot: string; text: string; bar: string }> = {
   ok: {
     border: "border-l-green-500",
@@ -31,10 +36,10 @@ const SEVERITY_STYLES: Record<UsageSeverity, { border: string; dot: string; text
   },
 };
 const NEUTRAL_STYLE = {
-  border: "border-l-zinc-300 dark:border-l-zinc-700",
-  dot: "bg-zinc-400",
-  text: "text-zinc-900 dark:text-zinc-50",
-  bar: "bg-zinc-400",
+  border: "border-l-border",
+  dot: "bg-text-muted",
+  text: "text-text",
+  bar: "bg-text-muted",
 };
 
 const REFRESH_INTERVAL_MS = 5 * 60 * 1000;
@@ -50,9 +55,11 @@ const REFRESH_INTERVAL_MS = 5 * 60 * 1000;
  */
 interface CardsViewProps {
   initialStates: CardStatesResponse;
+  /** Panel heading (home dashboard only). */
+  title?: string;
 }
 
-export function CardsView({ initialStates }: CardsViewProps) {
+export function CardsView({ initialStates, title }: CardsViewProps) {
   const [states, setStates] = useState(initialStates);
   const [collecting, setCollecting] = useState(false);
   const [notConnected, setNotConnected] = useState(false);
@@ -135,33 +142,36 @@ export function CardsView({ initialStates }: CardsViewProps) {
   }
 
   return (
-    <div className="flex flex-col gap-2">
-      <div className="flex items-center justify-end gap-2">
-        {notConnected && (
-          <Link href="/ai-usage/connections" className="text-xs text-amber-600 hover:underline dark:text-amber-400">
-            OpenAI 계정이 연결되어 있지 않습니다 — 연결하기
-          </Link>
-        )}
-        <button
-          type="button"
-          onClick={handleCollectNow}
-          disabled={collecting}
-          title="지금 새로고침"
-          aria-label="지금 새로고침"
-          className="rounded-md p-1.5 text-zinc-500 hover:bg-zinc-100 disabled:opacity-50 dark:text-zinc-400 dark:hover:bg-zinc-800"
-        >
-          <RefreshCw size={16} className={collecting ? "animate-spin" : ""} />
-        </button>
-      </div>
-      {/* One row across at desktop widths (flex, not grid — width divides
-          evenly no matter how many metrics are registered); stacks/wraps on
-          narrower screens where a single row wouldn't fit. */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:flex lg:flex-nowrap">
+    <Panel
+      title={title}
+      className="h-full"
+      actions={
+        <>
+          {notConnected && (
+            <Link href="/ai-usage/connections" className="text-xs text-amber-600 hover:underline dark:text-amber-400">
+              OpenAI 계정이 연결되어 있지 않습니다 — 연결하기
+            </Link>
+          )}
+          <IconButton type="button" onClick={handleCollectNow} disabled={collecting} title="지금 새로고침" aria-label="지금 새로고침">
+            <RefreshCw size={16} className={collecting ? "animate-spin" : ""} />
+          </IconButton>
+        </>
+      }
+    >
+      {/* Columns follow the PANEL's width (container query), not the
+          viewport: 2×2 in a home-page bento cell (down to a ~20rem panel,
+          i.e. the 7/12 cell at 1024px), 4 across only past 64rem — which
+          the bento cell never reaches (the workspace is capped at 100rem)
+          but the full-width AI usage page does — and 1 column on phones.
+          break-keep: Korean wraps at spaces, never mid-word.
+          auto-rows-fr + flex-1 let the tiles share any extra height evenly
+          when a taller neighbour in the same bento row stretches the panel. */}
+      <div className="grid flex-1 auto-rows-fr grid-cols-1 gap-3 break-keep @xs:grid-cols-2 @5xl:grid-cols-4">
         {USAGE_METRICS.map((metric) => (
           <UsageCard key={metric.id} label={metric.displayName} state={states[metric.id]} />
         ))}
       </div>
-    </div>
+    </Panel>
   );
 }
 
@@ -175,15 +185,13 @@ function UsageCard({ label, state }: { label: string; state: UsageCardState | un
   const severityStyle = remaining !== null ? SEVERITY_STYLES[usageSeverity(remaining)] : NEUTRAL_STYLE;
 
   return (
-    <div
-      className={`rounded-lg border border-l-4 border-zinc-200 p-4 dark:border-zinc-800 lg:min-w-0 lg:flex-1 ${severityStyle.border}`}
-    >
+    <Card variant="inset" className={`flex min-w-0 flex-col border-l-4 ${severityStyle.border}`}>
       <div className="flex items-center gap-2">
         <span className={`h-2 w-2 shrink-0 rounded-full ${severityStyle.dot}`} />
-        <span className="text-sm font-medium text-zinc-600 dark:text-zinc-400">{label}</span>
+        <span className="text-sm font-medium text-text-muted">{label}</span>
       </div>
       {renderBody(state, remaining, severityStyle)}
-    </div>
+    </Card>
   );
 }
 
@@ -193,13 +201,13 @@ function renderBody(
   colored: { text: string; bar: string },
 ) {
   if (!state || state.kind === "UNSUPPORTED") {
-    return <div className="mt-2 text-sm text-zinc-400 dark:text-zinc-500">수치 확인 미지원</div>;
+    return <div className="mt-2 text-sm text-text-muted">수치 확인 미지원</div>;
   }
   if (state.kind === "NO_DATA") {
-    return <div className="mt-2 text-sm text-zinc-400 dark:text-zinc-500">아직 입력한 기록 없음</div>;
+    return <div className="mt-2 text-sm text-text-muted">아직 입력한 기록 없음</div>;
   }
 
-  const observedAt = new Date(state.entry.recordedAt).toLocaleString();
+  const observedAt = formatDateTime(state.entry.recordedAt);
   const badge =
     state.kind === "PERIOD_ENDED" ? (
       <span className="text-xs text-amber-600 dark:text-amber-400">기간 종료됨</span>
@@ -207,19 +215,22 @@ function renderBody(
       <span className="text-xs text-amber-600 dark:text-amber-400">오래된 기록</span>
     ) : null;
 
+  // Figure + bar at the top, timestamps pinned to the bottom (mt-auto): when
+  // the tile is stretched to match a taller bento neighbour, the extra
+  // height becomes deliberate breathing room instead of an empty tail.
   return (
-    <div className="mt-2">
-      <div className={`text-2xl font-semibold ${colored.text}`}>{remaining}% left</div>
-      <div className="mt-2 h-1.5 w-full rounded-full bg-zinc-200 dark:bg-zinc-800">
-        <div
-          className={`h-1.5 rounded-full ${colored.bar}`}
-          style={{ width: `${Math.max(0, Math.min(100, remaining ?? 0))}%` }}
-        />
-      </div>
-      <div className="mt-2 flex flex-col gap-0.5 text-xs text-zinc-500 dark:text-zinc-400">
+    <div className="mt-3 flex flex-1 flex-col">
+      <div className={`text-3xl font-semibold tracking-tight ${colored.text}`}>{remaining}% left</div>
+      <ProgressBar value={remaining ?? 0} indicatorClassName={colored.bar} className="mt-3" />
+      <div className="mt-auto flex flex-col gap-0.5 pt-4 text-xs text-text-muted">
         {state.entry.resetsAt && (
           <span>
-            {new Date(state.entry.resetsAt).toLocaleString()} ({formatResetCountdown(state.entry.resetsAt)})
+            {formatDateTime(state.entry.resetsAt)}{" "}
+            {/* Relative to "now", which differs between SSR and hydration
+                by however long the page took to arrive — can legitimately
+                cross a minute boundary. Accept that one-level mismatch
+                instead of letting it force a full client re-render. */}
+            <span suppressHydrationWarning>({formatResetCountdown(state.entry.resetsAt)})</span>
           </span>
         )}
         <span>

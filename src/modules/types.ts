@@ -11,8 +11,10 @@ export interface ModuleManifest {
   href: string;
   /** Resolved to an actual icon by src/components/dashboard/icon-map.ts — never a module-specific import in the shell. */
   iconKey: string;
-  /** Server Component rendered on the home dashboard for this module. */
-  HomeWidget: ComponentType;
+  /** Server Component rendered on the home dashboard for this module.
+   * `title` is display-only: the home page passes the module label so the
+   * widget's own panel header can show it. */
+  HomeWidget: ComponentType<{ title?: string }>;
 }
 
 export interface NavItem {

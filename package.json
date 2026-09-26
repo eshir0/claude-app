@@ -8,7 +8,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test:unit": "node --test $(find src/modules -name '*.test.ts')",
+    "test:unit": "node --test $(find src/modules src/lib -name '*.test.ts')",
     "test:integration": "node --test src/*.integration.test.ts",
     "start:standalone": "node .next/standalone/server.js",
     "hash-password": "node scripts/hash-password.mjs"

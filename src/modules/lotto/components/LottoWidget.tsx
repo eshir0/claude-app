@@ -10,8 +10,8 @@ import { LottoView } from "./LottoView";
  * solely responsible for keeping it fresh; the widget only reads what's
  * already stored.
  */
-export default async function LottoWidget() {
+export default async function LottoWidget({ title }: { title?: string } = {}) {
   await requireSessionPage();
   const state = await getCardState();
-  return <LottoView initialState={state} />;
+  return <LottoView initialState={state} title={title} />;
 }

@@ -5,6 +5,7 @@ import {
   isGeoIpEligiblePublicAddress,
   ingestPayloadSchema,
   mergeIpSummaries,
+  isSuspiciousPath,
 } from "./logic.ts";
 
 describe("canonicalizeIp", () => {
@@ -154,6 +155,34 @@ describe("ingestPayloadSchema", () => {
   });
 });
 
+describe("isSuspiciousPath", () => {
+  test("flags common scanner/exploit probe paths", () => {
+    for (const path of [
+      "/.env",
+      "/wp-login.php",
+      "/wp-admin/setup-config.php",
+      "/xmlrpc.php",
+      "/phpMyAdmin/index.php",
+      "/shell.php",
+      "/../../etc/passwd",
+      "/actuator/env",
+      "/cgi-bin/luci",
+    ]) {
+      assert.equal(isSuspiciousPath(path), true, `expected ${path} to be flagged`);
+    }
+  });
+
+  test("is case-insensitive", () => {
+    assert.equal(isSuspiciousPath("/WP-LOGIN.PHP"), true);
+  });
+
+  test("does not flag ordinary app paths", () => {
+    for (const path of ["/", "/access-log", "/api/proxmox/status", "/ai-usage/connections"]) {
+      assert.equal(isSuspiciousPath(path), false, `expected ${path} not to be flagged`);
+    }
+  });
+});
+
 describe("mergeIpSummaries", () => {
   test("combines counts, sources, and geo rows by ip", () => {
     const firstSeen = new Date("2026-01-01T00:00:00Z");
@@ -175,8 +204,24 @@ describe("mergeIpSummaries", () => {
         hitCount: 3,
         firstSeen,
         lastSeen,
+        isSuspicious: false,
       },
     ]);
+  });
+
+  test("an ip in the suspiciousIps list is flagged, others are not", () => {
+    const firstSeen = new Date();
+    const merged = mergeIpSummaries(
+      [
+        { ip: "203.0.113.7", hitCount: 1, firstSeen, lastSeen: firstSeen },
+        { ip: "203.0.113.8", hitCount: 1, firstSeen, lastSeen: firstSeen },
+      ],
+      [],
+      [],
+      ["203.0.113.7"],
+    );
+    assert.equal(merged.find((m) => m.ip === "203.0.113.7")!.isSuspicious, true);
+    assert.equal(merged.find((m) => m.ip === "203.0.113.8")!.isSuspicious, false);
   });
 
   test("an ip with no geo row yet shows null country/city", () => {

@@ -12,6 +12,9 @@ export interface AiUsageEntryDTO {
   createdAt: string;
 }
 
+/** /api/ai-usage/chart point — only what the chart plots, same field names. */
+export type ChartPointDTO = Pick<AiUsageEntryDTO, "recordedAt" | "usagePercent">;
+
 export type UsageCardState =
   | { kind: "UNSUPPORTED" }
   | { kind: "NO_DATA" }

@@ -8,6 +8,8 @@ import {
   usedToRemainingPercent,
   usageSeverity,
   formatResetCountdown,
+  downsampleLttb,
+  CHART_MAX_POINTS,
 } from "./logic.ts";
 import type { AiUsageEntryDTO } from "./types.ts";
 
@@ -279,5 +281,50 @@ describe("computeCardState", () => {
     const state = computeCardState("chatgpt_codex_5h_window", sorted, now);
     assert.equal(state.kind, "OK");
     if (state.kind === "OK") assert.equal(state.entry.id, "newer");
+  });
+});
+
+describe("downsampleLttb", () => {
+  type P = { x: number; y: number };
+  const px = (p: P) => p.x;
+  const py = (p: P) => p.y;
+  // Sawtooth like a 5h usage window: climbs 0→100 then resets, repeated.
+  const sawtooth = (n: number, period: number): P[] =>
+    Array.from({ length: n }, (_, i) => ({ x: i, y: ((i % period) / (period - 1)) * 100 }));
+
+  test("returns an unchanged copy when already under the limit", () => {
+    const pts = sawtooth(50, 10);
+    const out = downsampleLttb(pts, 400, px, py);
+    assert.deepEqual(out, pts);
+    assert.notEqual(out, pts);
+  });
+
+  test("caps the count, keeps first/last, returns only original points in order", () => {
+    const pts = sawtooth(1500, 10);
+    const out = downsampleLttb(pts, 400, px, py);
+    assert.equal(out.length, 400);
+    assert.equal(out[0], pts[0]);
+    assert.equal(out[out.length - 1], pts[pts.length - 1]);
+    for (let i = 1; i < out.length; i++) assert.ok(out[i].x > out[i - 1].x, "strictly ascending x");
+    for (const p of out) assert.ok(pts.includes(p), "never synthesizes a point");
+  });
+
+  test("keeps an isolated spike that averaging would flatten", () => {
+    const pts: P[] = Array.from({ length: 1000 }, (_, i) => ({ x: i, y: 10 }));
+    pts[537] = { x: 537, y: 100 };
+    const out = downsampleLttb(pts, 50, px, py);
+    assert.ok(out.some((p) => p.y === 100));
+  });
+
+  test("at CHART_MAX_POINTS, every window of a worst-case 30-day 5h series keeps a near-peak point", () => {
+    // ~1500 samples, one ~10-sample cycle per 5h window (the real collector
+    // rate), every window climbing all the way to 100 before resetting.
+    const pts = sawtooth(1500, 10);
+    const out = downsampleLttb(pts, CHART_MAX_POINTS, px, py);
+    for (let w = 0; w < 150; w++) {
+      const inWindow = out.filter((p) => p.x >= w * 10 && p.x < (w + 1) * 10);
+      const top = Math.max(...inWindow.map((p) => p.y));
+      assert.ok(top >= 88, `window ${w}: highest kept point ${top.toFixed(1)}%`);
+    }
   });
 });

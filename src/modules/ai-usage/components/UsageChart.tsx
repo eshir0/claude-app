@@ -13,8 +13,9 @@ import {
 } from "recharts";
 import { USAGE_METRICS, type UsageMetricDef } from "@/modules/ai-usage/metrics";
 import { usedToRemainingPercent } from "@/modules/ai-usage/logic";
-import type { AiUsageEntryDTO } from "@/modules/ai-usage/types";
+import type { ChartPointDTO } from "@/modules/ai-usage/types";
 import { useAiUsageData } from "./AiUsageDataProvider";
+import { formatDate, formatDateTime } from "@/lib/datetime";
 
 const NUMERIC_METRICS = USAGE_METRICS.filter((m) => m.supportsNumericInput);
 // Preserves registry order (Codex before Claude, etc.) rather than sorting.
@@ -41,7 +42,7 @@ interface SeriesPoint {
   remainingPercent: number;
 }
 
-function toSeriesPoints(points: AiUsageEntryDTO[]): SeriesPoint[] {
+function toSeriesPoints(points: ChartPointDTO[]): SeriesPoint[] {
   return points.map((p) => ({
     x: new Date(p.recordedAt).getTime(),
     remainingPercent: usedToRemainingPercent(p.usagePercent),
@@ -72,7 +73,7 @@ export default function UsageChart() {
         const params = new URLSearchParams({ metricId: m.id, range });
         return fetch(`/api/ai-usage/chart?${params}`, { cache: "no-store" })
           .then((res) => (res.ok ? res.json() : []))
-          .then((data: AiUsageEntryDTO[]) => [m.id, toSeriesPoints(data)] as const);
+          .then((data: ChartPointDTO[]) => [m.id, toSeriesPoints(data)] as const);
       }),
     )
       .then((entries) => {
@@ -137,13 +138,13 @@ export default function UsageChart() {
                 dataKey="x"
                 type="number"
                 domain={["dataMin", "dataMax"]}
-                tickFormatter={(v: number) => new Date(v).toLocaleDateString()}
+                tickFormatter={(v: number) => formatDate(v)}
                 fontSize={12}
                 allowDuplicatedCategory={false}
               />
               <YAxis domain={[0, 100]} fontSize={12} />
               <Tooltip
-                labelFormatter={(v) => (typeof v === "number" ? new Date(v).toLocaleString() : String(v))}
+                labelFormatter={(v) => (typeof v === "number" ? formatDateTime(v) : String(v))}
                 formatter={(value, name) => [`${value}%`, name]}
                 contentStyle={{ backgroundColor: "#27272a", border: "1px solid #3f3f46", borderRadius: 8 }}
                 labelStyle={{ color: "#fafafa", fontWeight: 600, marginBottom: 4 }}

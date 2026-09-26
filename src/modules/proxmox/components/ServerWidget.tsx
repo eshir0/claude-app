@@ -10,11 +10,11 @@ import type { ProxmoxOverview } from "../types";
  * config must not 500 the whole dashboard — both are caught and handed to
  * ServerView as state to render, not thrown.
  */
-export default async function ServerWidget() {
+export default async function ServerWidget({ title }: { title?: string } = {}) {
   await requireSessionPage();
 
   if (!isProxmoxConfigured()) {
-    return <ServerView configured={false} initialOverview={null} initialError={null} />;
+    return <ServerView configured={false} initialOverview={null} initialError={null} title={title} />;
   }
 
   let initialOverview: ProxmoxOverview | null = null;
@@ -25,5 +25,7 @@ export default async function ServerWidget() {
     initialError = err instanceof Error ? err.message : String(err);
   }
 
-  return <ServerView configured={true} initialOverview={initialOverview} initialError={initialError} />;
+  return (
+    <ServerView configured={true} initialOverview={initialOverview} initialError={initialError} title={title} />
+  );
 }

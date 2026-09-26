@@ -1,7 +1,7 @@
 import "server-only";
 import { prisma } from "@/lib/prisma";
 import type { GeoLookupStatus } from "@/generated/prisma/client";
-import { mergeIpSummaries } from "./logic";
+import { mergeIpSummaries, isSuspiciousPath } from "./logic";
 import type { IpSummaryDTO, AccessLogEntryDTO } from "./types";
 
 // This is the ONLY module that touches Prisma for access-log data.
@@ -63,10 +63,20 @@ export async function getIpSummaries(limit = 50, minHitCount = 0): Promise<IpSum
   const ips = filteredCounts.map((c) => c.ip);
   if (ips.length === 0) return [];
 
-  const [sourceRows, geoRows] = await Promise.all([
+  const [sourceRows, geoRows, distinctIpPaths] = await Promise.all([
     prisma.accessLogEntry.groupBy({ by: ["ip", "source"], where: { ip: { in: ips } } }),
     prisma.ipGeoCache.findMany({ where: { ip: { in: ips } } }),
+    // One row per (ip, path) pair actually seen — enough to run the
+    // suspicious-path heuristic in JS without pulling every raw hit.
+    prisma.accessLogEntry.findMany({
+      where: { ip: { in: ips } },
+      distinct: ["ip", "path"],
+      select: { ip: true, path: true },
+    }),
   ]);
+  const suspiciousIps = Array.from(
+    new Set(distinctIpPaths.filter((r) => isSuspiciousPath(r.path)).map((r) => r.ip)),
+  );
 
   const merged = mergeIpSummaries(
     filteredCounts.map((c) => ({
@@ -77,6 +87,7 @@ export async function getIpSummaries(limit = 50, minHitCount = 0): Promise<IpSum
     })),
     sourceRows.map((r) => ({ ip: r.ip, source: r.source })),
     geoRows.map((r) => ({ ip: r.ip, status: r.status, country: r.country, city: r.city })),
+    suspiciousIps,
   );
 
   return merged.map((m) => ({
@@ -87,6 +98,7 @@ export async function getIpSummaries(limit = 50, minHitCount = 0): Promise<IpSum
     hitCount: m.hitCount,
     firstSeen: m.firstSeen.toISOString(),
     lastSeen: m.lastSeen.toISOString(),
+    isSuspicious: m.isSuspicious,
   }));
 }
 
