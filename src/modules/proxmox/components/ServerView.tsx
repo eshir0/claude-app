@@ -213,7 +213,7 @@ export default function ServerView({ configured, initialOverview, initialError, 
                 wrapping div above scrolls horizontally instead. */}
             <table className="w-full whitespace-nowrap text-left text-sm">
               <thead>
-                <tr className="border-b border-border text-xs text-text-muted">
+                <tr className="border-b border-border bg-inset text-xs text-text-muted dark:bg-transparent">
                   <th className="px-3 py-2 font-medium">이름</th>
                   <th className="px-3 py-2 font-medium">종류</th>
                   <th className="px-3 py-2 font-medium">상태</th>

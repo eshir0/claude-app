@@ -84,7 +84,7 @@ export function AccessLogView({ initialSummaries, minHitCount = 0, note, title }
           <div className="overflow-x-auto">
           <table className="w-full whitespace-nowrap text-left text-sm">
             <thead>
-              <tr className="border-b border-border text-xs text-text-muted">
+              <tr className="border-b border-border bg-inset text-xs text-text-muted dark:bg-transparent">
                 <th className="w-6 px-3 py-2" />
                 <th className="px-3 py-2 font-medium">IP</th>
                 <th className="px-3 py-2 font-medium">위치</th>
@@ -177,7 +177,7 @@ function IpSummaryRow({
       </tr>
       {expanded && (
         <tr>
-          <td colSpan={8} className="bg-bg px-3 py-2">
+          <td colSpan={8} className="bg-inset px-3 py-2">
             <IpEntryHistory ip={summary.ip} />
           </td>
         </tr>

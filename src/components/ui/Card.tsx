@@ -15,7 +15,7 @@ export function Card({ variant = "raised", className, ...props }: CardProps) {
     <div
       className={clsx(
         "rounded-2xl border p-4",
-        variant === "raised" ? "border-border bg-surface shadow-card" : "border-border/70 bg-bg",
+        variant === "raised" ? "border-border bg-surface shadow-card" : "border-border/70 bg-inset",
         className,
       )}
       {...props}

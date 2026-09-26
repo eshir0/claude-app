@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "사용량 대시보드",
+  title: "모니터링",
   description: "AI 구독 사용량 및 서버 지표를 확인하는 개인 대시보드",
 };
 

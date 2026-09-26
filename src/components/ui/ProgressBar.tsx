@@ -13,7 +13,7 @@ interface ProgressBarProps {
 export function ProgressBar({ value, className, indicatorClassName }: ProgressBarProps) {
   const pct = Math.max(0, Math.min(100, value));
   return (
-    <div className={clsx("h-1.5 w-full rounded-full bg-bg", className)}>
+    <div className={clsx("h-1.5 w-full rounded-full bg-track", className)}>
       <div
         className={clsx("h-1.5 rounded-full transition-[width]", indicatorClassName ?? "bg-accent")}
         style={{ width: `${pct}%` }}

@@ -5,20 +5,29 @@
    Everything else (components, Tailwind utilities) reads the mapped
    `--color-*`/`--shadow-*` names below. */
 :root {
-  --bg: #f6f5fa;
-  --surface: #ffffff;
-  --border: #e4e4e9;
-  --text: #18181b;
-  --text-muted: #71717a;
+  /* Light theme is layered, not all-white: a soft lavender-gray canvas,
+     off-white panels (no pure #fff glare), and tinted inset tiles — so
+     canvas / panel / tile each read as a distinct step. */
+  --bg: #eceaf2;
+  --surface: #fbfbfd;
+  --inset: #f2f1f7;
+  --track: #dedbe8;
+  --border: #dcd9e5;
+  --text: #1c1a26;
+  --text-muted: #5f5c73;
   --accent: #7c3aed;
   --accent-foreground: #ffffff;
-  --shadow-card: 0 1px 2px rgb(0 0 0 / 0.04), 0 10px 24px -14px rgb(24 16 52 / 0.14);
+  --shadow-card: 0 1px 2px rgb(28 20 60 / 0.05), 0 10px 26px -14px rgb(28 20 60 / 0.18);
 }
 
 .dark {
   --bg: #14101f;
   --surface: #1c1830;
   --border: #2e2747;
+  /* Same as --bg: the dark theme keeps its original look (tiles and bar
+     tracks were canvas-colored before these tokens existed). */
+  --inset: #14101f;
+  --track: #14101f;
   --text: #f4f2fa;
   --text-muted: #a99fc4;
   --accent: #a78bfa;
@@ -34,6 +43,8 @@
 @theme inline {
   --color-bg: var(--bg);
   --color-surface: var(--surface);
+  --color-inset: var(--inset);
+  --color-track: var(--track);
   --color-border: var(--border);
   --color-text: var(--text);
   --color-text-muted: var(--text-muted);

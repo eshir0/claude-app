@@ -59,7 +59,7 @@ export function Sidebar({ items }: { items: NavItem[] }) {
           <SidebarCollapseToggle />
         </div>
         <Link href="/" onClick={() => setOpen(false)} className="rounded-md text-sm font-semibold text-text hover:opacity-80">
-          내 대시보드
+          모니터링
         </Link>
         <div className="ml-auto">
           <ThemeToggle />
