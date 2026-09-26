@@ -17,6 +17,7 @@ import { Panel } from "@/components/ui/Panel";
 import { ProgressBar } from "@/components/ui/ProgressBar";
 import { Badge } from "@/components/ui/Badge";
 import { IconButton } from "@/components/ui/IconButton";
+import { HorizontalScroll } from "@/components/ui/HorizontalScroll";
 
 // Same severity → color convention as the AI-usage dashboard's cards (green/
 // amber/red), reused here so the two modules read as one app.
@@ -207,7 +208,7 @@ export default function ServerView({ configured, initialOverview, initialError, 
           </div>
 
           <div className="overflow-hidden rounded-2xl border border-border/70">
-            <div className="overflow-x-auto">
+            <HorizontalScroll>
             {/* whitespace-nowrap (inherited by every th/td) keeps columns from
                 wrapping character-by-character on narrow screens — the
                 wrapping div above scrolls horizontally instead. */}
@@ -261,7 +262,7 @@ export default function ServerView({ configured, initialOverview, initialError, 
                 )}
               </tbody>
             </table>
-            </div>
+            </HorizontalScroll>
           </div>
         </>
       )}

@@ -6,6 +6,7 @@ import { usedToRemainingPercent } from "@/modules/ai-usage/logic";
 import type { AiUsageEntryDTO } from "@/modules/ai-usage/types";
 import { useAiUsageData } from "./AiUsageDataProvider";
 import { formatDateTime } from "@/lib/datetime";
+import { HorizontalScroll } from "@/components/ui/HorizontalScroll";
 
 const PAGE_SIZE = 20;
 
@@ -84,7 +85,7 @@ export default function HistoryTable() {
         <span className="text-xs text-zinc-500">{total}건</span>
       </div>
 
-      <div className="overflow-x-auto">
+      <HorizontalScroll>
         <table className="w-full text-left text-sm">
           <thead>
             <tr className="border-b border-zinc-200 text-xs text-zinc-500 dark:border-zinc-800">
@@ -145,7 +146,7 @@ export default function HistoryTable() {
             )}
           </tbody>
         </table>
-      </div>
+      </HorizontalScroll>
 
       <div className="flex items-center justify-between text-sm">
         <button

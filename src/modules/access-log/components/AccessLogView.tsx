@@ -7,6 +7,7 @@ import { isSuspiciousPath } from "../suspicious-path";
 import { Card } from "@/components/ui/Card";
 import { Panel } from "@/components/ui/Panel";
 import { IconButton } from "@/components/ui/IconButton";
+import { HorizontalScroll } from "@/components/ui/HorizontalScroll";
 import { formatDateTime } from "@/lib/datetime";
 
 interface AccessLogViewProps {
@@ -81,7 +82,7 @@ export function AccessLogView({ initialSummaries, minHitCount = 0, note, title }
         </Card>
       ) : (
         <div className="overflow-hidden rounded-2xl border border-border/70">
-          <div className="overflow-x-auto">
+          <HorizontalScroll>
           <table className="w-full whitespace-nowrap text-left text-sm">
             <thead>
               <tr className="border-b border-border bg-inset text-xs text-text-muted dark:bg-transparent">
@@ -108,7 +109,7 @@ export function AccessLogView({ initialSummaries, minHitCount = 0, note, title }
               ))}
             </tbody>
           </table>
-          </div>
+          </HorizontalScroll>
         </div>
       )}
     </Panel>
