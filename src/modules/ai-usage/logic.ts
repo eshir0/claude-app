@@ -76,6 +76,15 @@ export function usedToRemainingPercent(usedPercent: number): number {
   return 100 - usedPercent;
 }
 
+/**
+ * Whole-number percent text for display ("43", not "43.00000000000001" or
+ * "43.99999999999999" — floating-point noise from `100 - used`). Rounds
+ * only the text; severity, bars and chart lines keep the exact value.
+ */
+export function formatPercent(percent: number): string {
+  return String(Math.round(percent));
+}
+
 export type UsageSeverity = "ok" | "warning" | "critical";
 
 /**

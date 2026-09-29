@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { RefreshCw } from "lucide-react";
 import { USAGE_METRICS } from "../metrics";
-import { usedToRemainingPercent, formatResetCountdown, usageSeverity, type UsageSeverity } from "../logic";
+import { usedToRemainingPercent, formatPercent, formatResetCountdown, usageSeverity, type UsageSeverity } from "../logic";
 import type { CardStatesResponse, UsageCardState } from "../types";
 import { Card } from "@/components/ui/Card";
 import { Panel } from "@/components/ui/Panel";
@@ -220,7 +220,7 @@ function renderBody(
   // height becomes deliberate breathing room instead of an empty tail.
   return (
     <div className="mt-3 flex flex-1 flex-col">
-      <div className={`text-3xl font-semibold tracking-tight ${colored.text}`}>{remaining}% left</div>
+      <div className={`text-3xl font-semibold tracking-tight ${colored.text}`}>{remaining !== null ? formatPercent(remaining) : "—"}% left</div>
       <ProgressBar value={remaining ?? 0} indicatorClassName={colored.bar} className="mt-3" />
       <div className="mt-auto flex flex-col gap-0.5 pt-4 text-xs text-text-muted">
         {state.entry.resetsAt && (

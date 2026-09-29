@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { USAGE_METRICS } from "@/modules/ai-usage/metrics";
-import { usedToRemainingPercent } from "@/modules/ai-usage/logic";
+import { formatPercent, usedToRemainingPercent } from "@/modules/ai-usage/logic";
 import type { AiUsageEntryDTO } from "@/modules/ai-usage/types";
 import { useAiUsageData } from "./AiUsageDataProvider";
 import { formatDateTime } from "@/lib/datetime";
@@ -117,7 +117,7 @@ export default function HistoryTable() {
                   <tr key={item.id} className="border-b border-zinc-100 dark:border-zinc-900">
                     <td className="py-2 pr-2 whitespace-nowrap">{formatDateTime(item.recordedAt)}</td>
                     <td className="py-2 pr-2">{metric?.displayName ?? item.metricId}</td>
-                    <td className="py-2 pr-2 tabular-nums">{usedToRemainingPercent(item.usagePercent)}%</td>
+                    <td className="py-2 pr-2 tabular-nums">{formatPercent(usedToRemainingPercent(item.usagePercent))}%</td>
                     <td className="py-2 pr-2">
                       <span
                         className={`rounded px-1.5 py-0.5 text-xs ${

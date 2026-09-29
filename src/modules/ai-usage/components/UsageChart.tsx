@@ -12,7 +12,7 @@ import {
   CartesianGrid,
 } from "recharts";
 import { USAGE_METRICS, type UsageMetricDef } from "@/modules/ai-usage/metrics";
-import { usedToRemainingPercent } from "@/modules/ai-usage/logic";
+import { formatPercent, usedToRemainingPercent } from "@/modules/ai-usage/logic";
 import type { ChartPointDTO } from "@/modules/ai-usage/types";
 import { useAiUsageData } from "./AiUsageDataProvider";
 import { formatDate, formatDateTime } from "@/lib/datetime";
@@ -145,7 +145,7 @@ export default function UsageChart() {
               <YAxis domain={[0, 100]} fontSize={12} />
               <Tooltip
                 labelFormatter={(v) => (typeof v === "number" ? formatDateTime(v) : String(v))}
-                formatter={(value, name) => [`${value}%`, name]}
+                formatter={(value, name) => [`${typeof value === "number" ? formatPercent(value) : value}%`, name]}
                 contentStyle={{ backgroundColor: "#27272a", border: "1px solid #3f3f46", borderRadius: 8 }}
                 labelStyle={{ color: "#fafafa", fontWeight: 600, marginBottom: 4 }}
                 itemStyle={{ color: "#fafafa" }}

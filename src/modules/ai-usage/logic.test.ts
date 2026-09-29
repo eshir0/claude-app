@@ -6,6 +6,7 @@ import {
   computeCardState,
   compareEntriesNewestFirst,
   usedToRemainingPercent,
+  formatPercent,
   usageSeverity,
   formatResetCountdown,
   downsampleLttb,
@@ -326,5 +327,19 @@ describe("downsampleLttb", () => {
       const top = Math.max(...inWindow.map((p) => p.y));
       assert.ok(top >= 88, `window ${w}: highest kept point ${top.toFixed(1)}%`);
     }
+  });
+});
+
+describe("formatPercent", () => {
+  test("hides floating-point noise from 100 - used", () => {
+    assert.equal(formatPercent(usedToRemainingPercent(57)), "43");
+    assert.equal(formatPercent(43.00000000000001), "43");
+    assert.equal(formatPercent(43.99999999999999), "44");
+  });
+  test("rounds to a whole number at the edges", () => {
+    assert.equal(formatPercent(0), "0");
+    assert.equal(formatPercent(100), "100");
+    assert.equal(formatPercent(12.5), "13");
+    assert.equal(formatPercent(0.4), "0");
   });
 });
