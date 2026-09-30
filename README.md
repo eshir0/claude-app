@@ -1,391 +1,409 @@
-# 모니터링
+# 📡 모니터링 · 개인 서버 대시보드
 
-> 📘 사용법·설치 방법을 쉽게 정리한 안내서: **https://eshir0.github.io/claude-app/** (또는 `GUIDE.md`) — 이 문서는 개발자용(기술 검증 내역, 배포 세부사항)이다.
->
-> 🗂️ 지금까지 한 작업을 표로 정리한 개발 이력: **[`CHANGELOG.md`](CHANGELOG.md)**
+> **AI 구독 사용량**, **Proxmox 서버 상태**, **여러 자체 호스팅 서버의 실제 접속 IP**를 한 화면에서 보는 1인용 웹 대시보드입니다. 매주 자동으로 만드는 **로또 번호 조합**도 들어 있습니다.
+> 값은 전부 서버가 직접 수집한 것만 보여 줍니다. 손으로 입력하는 기능은 없습니다.
 
-개인 서버에 배포하는 자체 호스팅 대시보드. 모듈형 베이스 위에 두 가지를 실시간으로 보여준다.
+<p>
+<img alt="Next.js" src="https://img.shields.io/badge/Next.js-16-000000?logo=nextdotjs&logoColor=white">
+<img alt="React" src="https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black">
+<img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-5-3178C6?logo=typescript&logoColor=white">
+<img alt="Tailwind CSS" src="https://img.shields.io/badge/Tailwind_CSS-4-06B6D4?logo=tailwindcss&logoColor=white">
+<img alt="Prisma" src="https://img.shields.io/badge/Prisma-7-2D3748?logo=prisma&logoColor=white">
+<img alt="SQLite" src="https://img.shields.io/badge/SQLite-003B57?logo=sqlite&logoColor=white">
+<img alt="Node.js" src="https://img.shields.io/badge/Node.js-24-5FA04E?logo=nodedotjs&logoColor=white">
+</p>
 
-## 기능
+| 문서 | 대상 |
+|---|---|
+| **README** (이 문서) | 전체 구조 · 기능 · 설정 한눈에 보기 |
+| [docs/ACCESS_LOG.md](docs/ACCESS_LOG.md) | 접속 기록 수집 구조 · 서비스 추가 패턴 · 신뢰 경계 |
+| [docs/OPERATIONS.md](docs/OPERATIONS.md) | 설치 · `$` 이스케이프 · 배포 · 백업 · 검증 상태 상세 |
+| [GUIDE.md](GUIDE.md) · [사용 안내서 페이지](https://eshir0.github.io/claude-app/) | 써 보려는 사람을 위한 쉬운 설명 |
+| [CHANGELOG.md](CHANGELOG.md) | 지금까지의 개발 이력 |
 
-| 모듈 | 보여주는 것 | 데이터를 가져오는 방식 |
+---
+
+## 📑 목차
+
+1. [한눈에 보기](#-한눈에-보기)
+2. [화면 디자인](#-화면-디자인)
+3. [전체 구조](#-전체-구조)
+4. [모듈](#-모듈)
+5. [접속 기록](#-접속-기록)
+6. [폴더 구조](#-폴더-구조)
+7. [설치와 실행](#-설치와-실행)
+8. [환경 변수](#-환경-변수)
+9. [운영·배포·백업](#-운영배포백업)
+10. [API](#-api)
+11. [테스트](#-테스트)
+12. [보안 설계](#-보안-설계)
+13. [알려진 한계](#-알려진-한계)
+
+---
+
+## 🔎 한눈에 보기
+
+| 항목 | 내용 |
+|---|---|
+| **무엇을** | AI 구독 한도가 얼마나 남았는지, 서버가 잘 돌고 있는지, 누가 내 서버들에 접속했는지를 한곳에서 확인 |
+| **AI 사용량** | Codex 5시간·주간 한도(기기 코드 로그인) + Claude 5시간·주간 한도(자체 호스팅 OmniRoute 경유). **30분마다 자동 수집** |
+| **서버** | Proxmox 호스트 CPU·메모리·디스크·온도, 스토리지 풀, VM·LXC별 사용량. 화면을 열 때 실시간 조회 |
+| **접속 기록** | 여러 서버 앞에 둔 작은 중계 스크립트가 **실제 접속 IP**를 보고 → 위치·횟수·경로 표시, **공격 경로를 찔러 본 IP는 빨간색** ([상세](docs/ACCESS_LOG.md)) |
+| **로또** | 역대 당첨 번호 통계로 검증한 조합 5세트를 **매주 월요일 09:00(KST)** 새 회차가 나왔을 때만 생성. 홈에는 표시하지 않음 |
+| **접속 방식** | 1인용 비밀번호 로그인. 외부에서는 HTTPS(Cloudflare → Nginx Proxy Manager)로만 로그인 |
+| **실행 환경** | Debian LXC · systemd 사용자 서비스 · Next.js standalone 빌드 · SQLite 파일 하나 |
+
+### 기술 스택
+
+| 계층 | 사용 기술 |
+|---|---|
+| 프레임워크 | Next.js 16.3 (App Router · standalone 출력 · `middleware.ts` 대신 `proxy.ts`) |
+| 화면 | React 19, Tailwind CSS v4 (CSS 변수 토큰 · container query), lucide 아이콘, Recharts |
+| 데이터 | Prisma 7 + SQLite (`better-sqlite3` 드라이버 어댑터) |
+| 인증 | iron-session 서명 쿠키 + bcrypt 해시 비밀번호 (NextAuth 미사용) |
+| 검증 | zod 스키마, Node 내장 테스트 러너(`node --test`) |
+| 중계 스크립트 | 의존성 없는 Node 스크립트 (`scripts/ip-log-agent.mjs`, `scripts/tcp-log-relay.mjs`) |
+| 배포 | systemd 사용자 서비스 (운영 중) · Docker Compose (작성됨, 미검증) |
+
+---
+
+## 🎨 화면 디자인
+
+라이트·다크 두 테마와 보라/인디고 강조색을 쓰는 카드형 디자인입니다. 각 모듈이 하나의 패널이고, 패널 폭에 맞춰(container query) 안쪽 타일이 1·2·4열로 바뀝니다.
+
+| 홈 · 라이트 | 홈 · 다크 |
+|---|---|
+| ![홈 라이트](docs/screenshots/home-light.jpg) | ![홈 다크](docs/screenshots/home-dark.jpg) |
+
+| 모바일 · 라이트 | 모바일 · 다크 | 접속 기록 · 다크 |
 |---|---|---|
-| **AI 사용량**<br>`/ai-usage` | ChatGPT Codex 5시간·주간 한도 남은 비율, 리셋 시각(카운트다운 포함), 이력 그래프 | Codex CLI의 공식 기기 코드(device‑code) OAuth 로그인 → `chatgpt.com/backend-api/wham/usage`. 서버가 **30분마다 자동 수집**, 홈 화면 새로고침 버튼으로 즉시 수집도 가능. 수동 입력 기능은 없음 |
-| **서버**<br>`/server` | Proxmox 호스트 CPU·메모리·디스크·온도, 데이터센터 스토리지 풀, VM·LXC별 CPU·메모리·디스크·네트워크 속도 | Proxmox API 토큰(TLS 인증서 지문 고정) + 온도는 SSH로 `lm-sensors` 조회(선택 기능, 별도 설정 필요) |
-| **로또 번호 생성**<br>`/lotto` | 실제 역대 당첨 번호(1회~) 통계 기반 12가지 규칙으로 검증한 조합 5세트 | `superkts.com` 당첨 번호 목록 페이지를 스크레이핑. 서버가 **매주 월요일 오전 9시(KST)에** 새 회차 여부를 확인하고, 새 회차가 나왔으면 그 회차 기준으로 조합을 한 번만 새로 생성(같은 회차는 재생성하지 않음). 홈 화면 새로고침 버튼은 이미 계산된 상태를 다시 읽어올 뿐, 그 자리에서 새로 생성하지 않음 |
-| **접속 기록**<br>`/access-log` | 이 앱을 포함한 여러 자체 호스팅 서버로 들어온 접속을 한 곳에서: IP, 어느 서버로 들어왔는지, 몇 번, 언제, (선택) 대략 어느 나라/도시인지. 스캐너/공격 경로를 요청한 IP는 빨간색, IP별 기록 삭제 버튼, 홈 위젯은 100회 이상 접속한 IP만 표시 | 각 서버가 `scripts/ip-log-agent.mjs`를 자기 앞단에 띄워 실제 접속을 로컬에서 캡처하고 이 앱의 ingest API로 보고 — 자세한 구성은 아래 "접속 기록" 절 참고 |
+| ![모바일 라이트](docs/screenshots/mobile-light.jpg) | ![모바일 다크](docs/screenshots/mobile-dark.jpg) | ![접속 기록](docs/screenshots/access-log-dark.jpg) |
 
-- 값을 직접 타이핑해 기록하는 기능은 없다 — 정확성이 보장되지 않는 수기 입력 대신, 실제로 수집한 값만 신뢰하기로 했다.
-- **Claude Pro는 추적하지 않는다.** Anthropic이 2026-02 Consumer Terms of Service 개정으로 Free/Pro/Max 구독 OAuth 토큰(또는 세션 쿠키)을 Claude Code/claude.ai가 아닌 제3의 도구에서 쓰는 것을 명시적으로 금지했다 — 세션 쿠키 방식이 Cloudflare 봇 탐지에 막혀 기술적으로도 불가능했던 것과는 별개의, 정책상의 이유다.
+| AI 사용량 페이지 (카드 · 이력 그래프 · 기록 표) |
+|---|
+| ![AI 사용량](docs/screenshots/ai-usage-light.jpg) |
 
-## 화면
+> 스크린샷은 **합성 데모 데이터**입니다. IP는 문서용 예약 대역(`192.0.2.x`, `198.51.100.x`, `203.0.113.x`)이고, 데모 환경에는 Proxmox가 없어 서버 패널이 "연결 안 됨"으로 보입니다.
 
-| 경로 | 내용 |
+| 특징 | 내용 |
 |---|---|
-| `/login` | 비밀번호 로그인(단일 사용자 앱) |
-| `/` | 홈 — AI 사용량·서버·접속 기록 요약(로또는 홈에 표시 안 함), 섹션별 새로고침 |
-| `/ai-usage` | 카드 + 이력 그래프 + 전체 기록 표 |
-| `/ai-usage/connections` | ChatGPT 계정 연결(기기 코드 로그인) |
-| `/server` | Proxmox 호스트·스토리지·VM/LXC 상세 |
-| `/lotto` | 로또 조합 5세트 상세(번호별 빈출/중간/저빈도 구분, 홀짝·고저·합계, 주목할 부분조합) |
-| `/access-log` | 고유 IP별 요약(위치·접속한 서버 목록·횟수·최초/최근 접속) + 클릭 시 개별 접속 기록 |
+| 두 테마 | 상단 해·달 버튼으로 전환, 선택을 기억, 저장이 없으면 기기 설정을 따름, 첫 화면 깜빡임 없음 |
+| 라이트 테마 | 순백 대신 **배경 → 패널 → 안쪽 타일**이 한 단계씩 구분되는 옅은 라벤더 톤. 글자 대비 WCAG AA(보조 글씨 5.4~6.2:1) |
+| 의미 색 | 초록·주황·빨강은 **상태 전용**(남은 한도, 디스크 사용률, 위험 IP). 보라 강조색과 섞지 않음 |
+| 사이드바 | 데스크톱은 떠 있는 패널 + 접기 버튼(상태 기억), 모바일은 서랍(Esc·배경 클릭으로 닫힘) |
+| 넓은 표 | 화면보다 넓으면 **마우스로 꾹 눌러 좌우로 끌어** 이동. 끌기와 클릭은 5px 기준으로 구분 |
+| 시간 표시 | 서버·브라우저 모두 `ko-KR` + `Asia/Seoul`로 고정 → 하이드레이션 불일치 없음 |
+| 공통 컴포넌트 | `src/components/ui/`: `Panel` · `Card` · `Button` · `IconButton` · `Badge` · `ProgressBar` · `HorizontalScroll` |
 
-## 기술 스택
+---
 
-| 레이어 | 선택 |
+## 🏗 전체 구조
+
+```mermaid
+flowchart LR
+    U["👤 사용자<br/>(브라우저)"] -->|"HTTPS"| CF["☁ Cloudflare"]
+    CF --> NPM["본가 서버<br/>Nginx Proxy Manager<br/>(TLS 종료)"]
+    NPM -->|"중계 · WireGuard"| GW["WG 게이트웨이<br/>(숙소)"]
+    GW --> AG
+
+    subgraph APPHOST["🖥 claude-app 서버 (systemd 사용자 서비스)"]
+        AG["ip-log-agent<br/>:3000 (공개 포트)"] -->|"실제 IP를 X-Forwarded-For로"| NEXT["Next.js<br/>127.0.0.1:3001"]
+        AG -.->|"접속 보고"| NEXT
+        NEXT <--> DB[("SQLite<br/>prisma/dev.db")]
+        OA["omniroute-access-agent<br/>stock-access-agent"] -.->|"접속 보고"| NEXT
+    end
+
+    NEXT -->|"기기 코드 OAuth · 사용량"| CHATGPT["☁ chatgpt.com"]
+    NEXT -->|"관리 API 키"| OMNI["OmniRoute<br/>(Claude 사용량)"]
+    NEXT -->|"API 토큰 · TLS 지문 고정"| PVE["Proxmox API"]
+    NEXT -.->|"SSH · lm-sensors (선택)"| PVE
+    NEXT -->|"당첨 번호 목록"| LOTTO["☁ superkts.com"]
+    NEXT -->|"새 IP 위치 조회 (HTTPS)"| GEO["☁ ipwho.is"]
+```
+
+- 외부 요청은 반드시 `ip-log-agent`(:3000)를 거쳐 Next.js(:3001, 루프백 전용)에 닿습니다. agent가 **실제 접속 IP를 확정해 헤더로 넘기고**, 동시에 접속 기록으로 보고합니다.
+- 다른 서비스(OmniRoute, stock, Proxmox 웹, 마인크래프트)도 같은 방식의 중계를 거치며 이 앱으로 접속을 보고합니다. → [docs/ACCESS_LOG.md](docs/ACCESS_LOG.md)
+
+### 백그라운드 작업
+
+`src/instrumentation-node.ts`가 서버 시작 시 한 번씩 등록합니다. 실패해도 로그만 남기고 다른 작업에는 영향을 주지 않습니다.
+
+| 작업 | 주기 | 하는 일 |
+|---|---|---|
+| AI 사용량 수집 | 시작 5초 뒤, 이후 **30분마다** | Codex 사용량(`wham/usage`) + OmniRoute의 Claude 사용량 저장. 연결이 없으면 조용히 건너뜀 |
+| 로또 확인 | 시작 15초 뒤 + **매주 월요일 09:00 KST** | 새 회차가 있으면 당첨 번호 저장 후 조합 5세트 생성. 같은 회차는 다시 만들지 않음 |
+| 접속 기록 정리 | 시작 25초 뒤, 이후 **10분마다** | 90일 지난 기록 삭제 · 1만 건 넘은 IP 초기화 · 쓰이지 않는 위치 캐시 삭제 · 새 IP 위치 조회(회당 최대 5개) |
+
+AI 사용량 패널의 새로고침 버튼은 그 자리에서 바로 수집하고, 로또 패널의 새로고침은 이미 계산된 값을 다시 읽기만 합니다.
+
+---
+
+## 🧩 모듈
+
+모든 모듈은 `src/modules/<이름>/`에 `manifest.ts`(사이드바·홈 위젯) · `service.ts`(DB) · `logic.ts`(순수 함수, 테스트 대상) · `components/`를 가집니다.
+
+| 모듈 | 경로 | 보여 주는 것 | 데이터 출처 |
+|---|---|---|---|
+| **AI 사용량** | `/ai-usage` · `/ai-usage/connections` | 한도별 남은 %(경고 색) · 초기화 시각과 카운트다운 · 30일 이력 그래프 · 전체 기록 표 | Codex CLI의 기기 코드 OAuth → `chatgpt.com/backend-api/wham/usage` · OmniRoute 관리 API(`/api/usage/{id}`) |
+| **서버** | `/server` | 호스트 CPU·메모리·루트 디스크·가동 시간·CPU/내장 GPU/NVMe 온도 · 스토리지 풀 · VM·LXC 표(75% 주황, 90% 빨강) | Proxmox API 토큰(인증서 지문 고정) · 온도는 SSH + `lm-sensors`(선택) |
+| **로또 번호 생성** | `/lotto` | 조합 5세트 · 번호별 빈출/저빈도 구분 · 홀짝·고저·합계 · 주목할 부분조합 | `superkts.com` 당첨 번호 목록 스크레이핑 |
+| **접속 기록** | `/access-log` | 고유 IP별 위치·서버·횟수·최초/최근 접속 · 클릭하면 개별 요청 · 위험 IP 빨간색 · IP 삭제 | 각 서버 앞의 중계 스크립트가 보고 · 위치는 ipwho.is |
+
+| 홈 화면 배치 | |
 |---|---|
-| 프레임워크 | Next.js 16.3 (App Router, `middleware.ts`가 아닌 `proxy.ts`) |
-| 언어 / UI | TypeScript, React 19, Tailwind CSS v4 |
-| DB | Prisma 7.10 + SQLite (`better-sqlite3` 드라이버 어댑터) |
-| 인증 | iron-session 기반 커스텀 세션(NextAuth 미사용) |
-| 런타임 | Node.js 24 |
-| 배포 | systemd 사용자 서비스(현재 운영 중, 검증됨) 또는 Docker(작성은 되어 있으나 이 개발 환경엔 Docker 자체가 없어 미검증) |
+| 순서 | AI 사용량 → 서버 → 접속 기록 (각각 전체 폭) |
+| 숨김 | 로또 (사이드바와 `/lotto`에는 있음) |
+| 접속 기록 위젯 | **100회 이상** 접속한 IP만 표시 |
+| 설정 위치 | `src/app/(dashboard)/page.tsx`의 `HOME_LAYOUT` |
 
-## 로컬 개발
+**새 모듈 추가:** `src/modules/registry.ts`에 manifest를 넣으면 사이드바와 홈 위젯까지는 자동입니다. 페이지·API·Prisma 스키마는 모듈이 직접 갖춰야 합니다.
+
+---
+
+## 🛰 접속 기록
+
+```mermaid
+flowchart LR
+    C["🌐 방문자"] --> H["공인 서버<br/>순수 중계"]
+    H -->|"WireGuard"| G["WG 게이트웨이<br/>순수 중계"]
+    G --> R["claude-app 서버의<br/>보고용 agent"]
+    R --> S["실제 서비스"]
+    R -.->|"POST /api/access-log/ingest<br/>(source별 키)"| APP["대시보드"]
+```
+
+| 항목 | 동작 |
+|---|---|
+| 실제 IP 확정 | 각 홉은 **바로 앞 홉이 등록된 IP일 때만** 그 홉이 넘긴 IP를 믿고, 그 외에는 소켓 주소로 덮어씀(위조 방지) |
+| HTTP 서비스 | `ip-log-agent.mjs` — 메서드 · 경로(쿼리 제외) · User-Agent 기록 |
+| TCP/TLS 서비스 | `tcp-log-relay.mjs` — 홉 사이에서만 PROXY protocol v1로 IP 전달, 연결 단위 기록 |
+| 인증 | source마다 따로 발급한 키(`ACCESS_LOG_INGEST_KEYS`). 한 서버의 키로 다른 source를 사칭할 수 없음 |
+| 저장하지 않는 것 | 사설·예약 대역 IP, 쿼리 문자열, ingest 경로 자체, 제외 경로(`/_next/static/` 등) |
+| 위험 IP | 스캐너·공격 경로 목록(`suspicious-path.ts`)에 걸린 IP를 빨간색으로 (IDS/WAF는 아님) |
+| 보존 | 90일 · IP당 1만 건 넘으면 초기화 |
+
+지금 연결된 source: `claude-app` · `omniroute` · `stock` · `proxmox` · `minecraft`. 서비스를 추가하는 방법, NAT 게이트웨이 뒤 구성, 신뢰 경계, GeoIP 프라이버시 선택은 **[docs/ACCESS_LOG.md](docs/ACCESS_LOG.md)** 에 있습니다.
+
+---
+
+## 📁 폴더 구조
+
+```text
+claude-app/
+├── src/
+│   ├── app/                         # App Router
+│   │   ├── (dashboard)/             # 로그인 뒤 화면: 홈 · ai-usage · server · lotto · access-log
+│   │   ├── api/                     # Route Handler (아래 API 표)
+│   │   ├── login/                   # 로그인 화면
+│   │   ├── layout.tsx               # 테마·사이드바 상태 선적용 스크립트
+│   │   └── globals.css              # 디자인 토큰 (라이트/다크) · Tailwind v4 설정
+│   ├── components/
+│   │   ├── dashboard/               # 사이드바 · 테마 전환 · 접기 버튼 · 로그아웃
+│   │   ├── ui/                      # Panel · Card · Button · IconButton · Badge · ProgressBar · HorizontalScroll
+│   │   └── PreferenceClassSync.tsx  # 하이드레이션 뒤 <html> 클래스 복원
+│   ├── lib/
+│   │   ├── auth/                    # 세션 · 로그인 검사 · Origin 검사 · 로그인 시도 제한 · 비밀번호
+│   │   ├── crypto.ts                # AES-256-GCM (저장하는 연결 정보 암호화)
+│   │   ├── datetime.ts              # ko-KR / Asia/Seoul 고정 포맷
+│   │   └── prisma.ts
+│   ├── modules/
+│   │   ├── ai-usage/                # 지표 정의 · 카드 상태 · LTTB 다운샘플 · collector(Codex/OmniRoute)
+│   │   ├── proxmox/                 # API 클라이언트 · 온도(SSH) · 오류 문구
+│   │   ├── lotto/                   # 스크레이퍼 · 파서 · 조합 규칙
+│   │   ├── access-log/              # ingest 검증 · IP 정규화 · 위험 경로 · 위치 조회
+│   │   ├── registry.ts              # 사이드바·홈 위젯 등록
+│   │   └── types.ts
+│   ├── proxy.ts                     # 로그인 안 된 요청을 /login으로 (보안 경계는 아님)
+│   ├── instrumentation.ts           # 필수 환경 변수 검사 → 없으면 시작 거부
+│   └── instrumentation-node.ts      # 백그라운드 작업 등록
+├── prisma/                          # schema.prisma · migrations · dev.db(커밋 안 함)
+├── scripts/
+│   ├── ip-log-agent.mjs             # HTTP 중계 + 접속 보고
+│   ├── tcp-log-relay.mjs            # TCP 중계 + PROXY protocol
+│   ├── hash-password.mjs            # 비밀번호 해시 생성 (대화형)
+│   └── sync-standalone-assets.sh    # standalone 빌드에 static/public 복사
+├── deploy/                          # systemd 유닛 예시
+├── docs/                            # 상세 문서 · 스크린샷 · GitHub Pages 안내서(index.html)
+├── Dockerfile · docker-compose.yml · docker-entrypoint.sh
+├── GUIDE.md · CHANGELOG.md
+└── .env.example
+```
+
+### 모듈 관계
+
+```mermaid
+flowchart TD
+    page["app/(dashboard)/*<br/>페이지"] --> guard["lib/auth/guard<br/>requireSessionPage"]
+    api["app/api/*<br/>Route Handler"] --> guardApi["lib/auth/guard<br/>requireSessionApi"]
+    api --> origin["lib/auth/origin-check"]
+    page --> reg["modules/registry"]
+    reg --> m1["ai-usage"] & m2["proxmox"] & m3["lotto"] & m4["access-log"]
+    api --> svc["modules/*/service.ts"]
+    svc --> logic["modules/*/logic.ts<br/>(순수 함수 · 테스트)"]
+    svc --> prisma["lib/prisma"] --> db[("SQLite")]
+    inst["instrumentation-node"] --> col["modules/*/collector"] --> svc
+    ingest["api/access-log/ingest"] -->|"source별 키"| svc
+```
+
+---
+
+## 🚀 설치와 실행
+
+### 준비물
+
+| 항목 | 용도 |
+|---|---|
+| Node.js 24 | 앱 실행 · 빌드 |
+| ChatGPT 계정 (선택) | Codex 사용량 — 화면에서 기기 코드로 연결 |
+| OmniRoute (선택) | Claude 사용량 — 관리 API 키와 연결 ID |
+| Proxmox API 토큰 (선택) | 서버 모니터링. SSH 키를 더하면 온도까지 |
+
+### 로컬 개발
 
 ```bash
 npm install
 cp .env.example .env
-npm run hash-password   # 대화형 프롬프트 — 비밀번호를 CLI 인자로 넘기지 않음
-# 위 출력값을 .env의 AUTH_PASSWORD_HASH에 붙여넣는다 (아래 "중요" 참고)
-node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"  # SESSION_SECRET
+npm run hash-password                     # 대화형 — 출력된 줄을 AUTH_PASSWORD_HASH에
+node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"   # SESSION_SECRET, CREDENTIAL_ENCRYPTION_KEY (서로 다르게)
 npx prisma migrate dev
-npm run dev
+npm run dev                               # http://localhost:3000 → /login
 ```
 
-`http://localhost:3000` 접속 → `/login`으로 리다이렉트 → 설정한 비밀번호로 로그인.
+> ⚠️ bcrypt 해시의 `$`는 **실행 방식마다 적는 법이 다릅니다.** Next.js(`npm run dev`/standalone)는 `\$`로 이스케이프, `docker compose`는 작은따옴표로 감쌉니다. `npm run hash-password`가 두 형식을 모두 출력합니다. → [docs/OPERATIONS.md](docs/OPERATIONS.md#-로컬-개발과--이스케이프)
 
-**중요 — bcrypt 해시의 `$`는 실행 방식마다 다르게 다뤄야 한다.** 두 가지 다른 도구가
-`$`를 서로 다른 방식으로 처리하므로, 한쪽에서 맞는 형식을 다른 쪽에 그대로 쓰면 안 된다
-(둘 다 실제로 재현·확인함):
-
-| 실행 방식 | `$` 처리 | 형식 |
-|---|---|---|
-| `npm run dev` / `npm run start:standalone` (Next.js `@next/env`) | `$VARIABLE`를 다른 변수 참조로 자동 치환 — 이스케이프 안 하면 `$2b`, `$12`가 존재하지 않는 변수로 취급되어 값이 통째로 빈 문자열이 됨(앱은 이 경우 부팅을 거부한다) | `AUTH_PASSWORD_HASH=\$2b\$12\$나머지...` (모든 `$` 앞에 `\`) |
-| `docker compose` (compose의 `${VAR}` 인터폴레이션, 공식 문서 기준) | 값이 **작은따옴표**로 감싸져 있으면 이스케이프 없이 그대로 사용 — 백슬래시를 쓰면 안 됨(백슬래시 자체가 값에 포함됨) | `AUTH_PASSWORD_HASH='$2b$12$나머지...'` |
-
-`npm run hash-password`(대화형)를 실행하면 두 형식을 모두 라벨을 붙여 출력해준다 — 실행
-방식에 맞는 줄을 그대로 복사해서 쓰면 된다. **이 둘을 같은 `.env` 파일에 함께 써야 하는
-경우는 없어야 한다** — `docker compose`는 기본적으로 `docker-compose.yml`과 같은 위치의
-`.env`를 자동으로 읽으므로, 로컬 개발용 `.env`(Next.js 이스케이프 형식)를 그대로 Docker
-배포에도 재사용하면 형식이 맞지 않아 깨진다. 배포용 `.env`는 로컬 개발용과 분리해서
-관리한다(예: 별도 디렉터리, 또는 배포 서버 전용 `.env`).
-
-Next.js 쪽 형식은 이 세션에서 직접 실행해 확인했다 — 생성된 해시를 위 형식으로 `.env`에
-써서 `@next/env`로 다시 읽은 뒤 원래 비밀번호로 `bcrypt.compare`가 성공하는 것까지 검증함.
-Docker Compose 쪽 작은따옴표 규칙은 [공식 문서](https://docs.docker.com/compose/how-tos/environment-variables/variable-interpolation/)에
-근거했지만, 이 환경에 Docker가 없어 `docker compose` 자체로 실행 재현은 하지 못했다 —
-미검증으로 남겨둔다(아래 "검증 상태" 참고).
-
-## 환경변수
-
-`.env.example`에 전체 목록과 예시가 있다. 핵심만 정리하면:
-
-| 변수 | 필수 | 설명 |
-|---|---|---|
-| `DATABASE_URL` | ✅ | SQLite 파일 경로 |
-| `AUTH_PASSWORD_HASH` | ✅ | 로그인 비밀번호의 bcrypt 해시 (`$` 이스케이프 위 표 참고) |
-| `SESSION_SECRET` | ✅ | 세션 서명용 임의값(32바이트 이상) |
-| `APP_ORIGIN` | ✅ | 접속 주소(CSRF Origin 검증용) — 쉼표로 여러 개 지정 가능 |
-| `CREDENTIAL_ENCRYPTION_KEY` | ✅ | ChatGPT 연결 정보 암호화 키 |
-| `PROXMOX_URL` / `PROXMOX_TOKEN_ID` / `PROXMOX_TOKEN_SECRET` / `PROXMOX_SSL_FINGERPRINT` | 선택 | Proxmox 서버 모니터링. 넷 다 없으면 "서버" 화면이 "연결 안 됨"으로만 나오고 나머지는 정상 동작 |
-| `PROXMOX_SSH_HOST` / `PROXMOX_SSH_KEY_PATH` | 선택 | 온도 모니터링(위 넷과 별개, SSH+lm-sensors 방식) |
-| `CODEX_CLI_PATH` | 선택 | `codex` 바이너리 경로 — 기본값(`node_modules/.bin/codex`)이 대부분의 경우 맞음 |
-| `FORCE_INSECURE_COOKIES` | 선택, 위험 | LAN IP 등 `localhost`가 아닌 주소로 평문 HTTP 테스트할 때만(아래 참고) |
-
-하나라도 필수 항목이 없거나 형식이 잘못되면 서버가 요청을 받기 전에 스스로 종료한다
-(`src/instrumentation.ts` / `src/instrumentation-node.ts`).
-
-## LAN IP 등 `localhost`가 아닌 주소로 접속할 때 로그인이 안 되는 경우
-
-프로덕션 빌드는 세션 쿠키에 `Secure` 플래그를 켠다. 브라우저는 `http://localhost`만
-예외적으로 "보안 컨텍스트"로 취급해 평문 HTTP에서도 `Secure` 쿠키를 저장하는데, **LAN
-IP(예: `192.168.x.x`)나 다른 호스트명은 이 예외에 해당하지 않는다.** 그 결과: 로그인
-요청 자체는 서버에서 성공(200)하지만 브라우저가 응답의 `Set-Cookie`를 조용히 버리고,
-바로 다시 `/login`으로 튕겨서 마치 아무 일도 안 일어난 것처럼 보인다.
-
-같은 기기의 다른 브라우저/터미널에서 서버 로그를 확인해보면 로그인 요청이 실제로
-200을 반환하는데도 클라이언트에서 계속 미인증으로 리다이렉트된다면 이 문제일 가능성이
-크다. 실제 인터넷에 노출하는 배포에는 해당하지 않는 문제이며(그 경우는 HTTPS가
-전제이므로 `Secure`가 정상 동작), **LAN/사설망에서 평문 HTTP로 테스트할 때만** `.env`에
-아래를 추가한다:
-
-```
-FORCE_INSECURE_COOKIES=true
-```
-
-## 로그인 시도 제한과 신뢰 가능한 클라이언트 IP
-
-Next.js Route Handler는 실제 접속 IP를 프레임워크 차원에서 노출하지 않는다
-(`NextRequest.ip`는 제거됨). 그래서 로그인 시도 제한이 IP별로 정확하려면 배포 구성 자체가
-IP를 신뢰 가능하게 만들어줘야 한다:
-
-1. 이 앱의 포트를 인터넷에 직접 노출하지 않는다 — 신뢰하는 리버스 프록시만 이 앱에
-   닿을 수 있어야 한다.
-2. 리버스 프록시(Caddy/nginx 등)가 클라이언트가 보낸 전달 헤더를 무시하고, 실제 접속 주소로
-   덮어써서 전달하도록 설정한다 (예: nginx `proxy_set_header X-Forwarded-For $remote_addr;`).
-3. 그 구성에서만 `.env`에 `TRUSTED_PROXY=true`와 `CLIENT_IP_HEADER=X-Forwarded-For`를 설정한다.
-
-이 두 값을 설정하지 않으면(기본값), 신뢰할 수 없는 헤더로 제한을 우회하는 대신 **서버
-전체(IP 무관) 로그인 제한**으로 대체 동작한다 — 개인용 단일 사용자 앱에 맞는 거친 대안이다.
-두 경우 모두 인메모리 상태라 앱 재시작 시 초기화된다(단일 인스턴스 전제, 한계로 인정).
-
-바로 아래 "접속 기록" 절의 `scripts/ip-log-agent.mjs`가 정확히 위 1~2번을 만족시키는
-신뢰 가능한 리버스 프록시라서, 그걸 앞단에 두면 `TRUSTED_PROXY`/`CLIENT_IP_HEADER`를 켜도
-안전하다.
-
-## 접속 기록
-
-이 앱을 포함해 자신이 운영하는 여러 자체 호스팅 서버에 **어떤 IP가, 언제, 어느 서버로**
-접속했는지 한 대시보드에서 보기 위한 기능. 각 서버가 스스로 자기 접속을 캡처해서 이
-대시보드로 "보고"하는 방식이다 — 이 서버가 다른 Proxmox 게스트로 향하는 트래픽을 직접
-가로챌 방법은 없다(같은 브리지의 게스트 하나일 뿐이라 다른 게스트로 가는 트래픽이 이
-컨테이너를 거치지 않는다).
-
-### 구조
-
-```
-다른 서버(예: pihole)                    이 대시보드(claude-app)
-┌─────────────────────┐                  0.0.0.0:3000
-│ ip-log-agent.mjs      │──POST(LAN)────▶ ┌───────────────────────────┐
-│ (그 서버 자신의 :port) │                 │ ip-log-agent.mjs (public)  │
-└─────────────────────┘                  │  → 127.0.0.1:3001 로 전달   │
-                                          │  /api/access-log/ingest    │
-claude-app 자신도 동일 agent를            │  자체 경로는 절대 로그 안 함│
-0.0.0.0:3000 앞단에 두고,                 └──────────┬────────────────┘
-127.0.0.1:3001(Next)로 전달                          ▼
-                                          Next(127.0.0.1:3001) →
-                                          /api/access-log/ingest → Prisma
-```
-
-`scripts/ip-log-agent.mjs`는 의존성 없는 순수 Node 스크립트 하나다. 실제 요청을
-그대로 프록시하면서, 동시에 진짜 접속 IP(클라이언트가 보낸 `X-Forwarded-For`는 무조건
-버리고 소켓 주소로 덮어씀)를 이 대시보드의 ingest API로 비동기 보고한다 — 보고가
-실패해도 프록시된 응답에는 전혀 영향을 주지 않는다. `/api/access-log/ingest` 자기 자신에
-대한 요청은 (다른 서버의 보고가 이 앱의 public agent를 거쳐갈 때도) 절대 접속 기록으로
-남기지 않는다 — 안 그러면 보고 자체가 또 하나의 가짜 접속 기록을 만들게 된다.
-
-### claude-app 자신에 설치
-
-```
-cp deploy/claude-app-access-agent.service.example ~/.config/systemd/user/claude-app-access-agent.service
-# claude-app.service도 PORT=3001/HOSTNAME=127.0.0.1로 바뀐 버전으로 교체
-systemctl --user daemon-reload
-systemctl --user enable --now claude-app-access-agent.service
-systemctl --user restart claude-app.service
-```
-
-### 다른 서버에 설치
-
-`scripts/ip-log-agent.mjs` 파일 하나만 복사하면 된다(이 저장소의 나머지 코드나
-`node_modules`가 전혀 필요 없음). `AGENT_APP_HOST`/`AGENT_APP_PORT`는 그 서버 자신의
-실제 서비스를 가리키고, `AGENT_INGEST_URL`은 **claude-app의 LAN IP**, public agent
-포트(3000) 기준으로 설정한다 — `127.0.0.1`은 claude-app 자기 자신에서만 의미가 있다:
-
-```
-AGENT_INGEST_URL=http://<claude-app의 LAN IP>:3000/api/access-log/ingest
-```
-
-`AGENT_SOURCE_NAME`은 claude-app의 `.env`에 있는 `ACCESS_LOG_INGEST_KEYS`에 새 항목을
-추가하고, 그 값을 그 서버의 `AGENT_INGEST_KEY`로 넣는다 — 서버마다 별도 credential이라
-한 서버의 키가 유출돼도 다른 서버(또는 claude-app 자신) 행세를 할 수 없다.
-
-### 중간에 NAT/VPN 게이트웨이가 하나 더 있는 경우(예: WireGuard)
-
-외부 → 공인 IP를 가진 홈 서버 → WireGuard 터널 → (자기 자신도 서버인) 게이트웨이 →
-claude-app 처럼, claude-app 앞에 순수 L3 NAT 홉이 하나 더 있는 구성이면 얘기가 다르다.
-그 홉이 **DNAT만** 한다면(목적지만 바꿈, 출발지는 그대로) 진짜 클라이언트 IP가 그대로
-살아서 도착하지만, 그 홉이 (흔히 응답 패킷이 다시 터널로 돌아오게 하려고) **자기 자신으로
-SNAT까지** 한다면 진짜 IP는 claude-app에 닿기도 전에 사라진다 — 이건 claude-app 쪽에서
-헤더를 아무리 잘 처리해도 복구할 수 없다. 그 홉의 raw 소켓 단계에서만 아직 진짜 IP가 남아있기
-때문이다.
-
-해결책은 그 게이트웨이에도 `ip-log-agent.mjs`를 그대로 하나 더 두는 것이다 — 단,
-`AGENT_INGEST_URL`/`AGENT_INGEST_KEY`를 아예 설정하지 않으면 **순수 릴레이 모드**로 동작해서
-(자기 접속을 보고하지 않고 프록시+실제 IP 전달만 함), 그 게이트웨이 자신을 access-log의
-별도 source로 남기고 싶지 않다면 그대로 두면 된다. 그 게이트웨이가 원래 하던 순수 iptables/
-nftables DNAT를 **로컬 프로세스로 리다이렉트**하도록 바꾸고(그래야 패킷이 커널 NAT 규칙을
-거쳐 바로 다음 홉으로 가버리지 않고 이 프로세스가 실제로 받는다), 그 프로세스가 자신이 본
-진짜 소켓 주소로 `X-Forwarded-For`를 설정해서 claude-app으로 넘긴다.
-
-그다음 claude-app 쪽 에이전트에 `AGENT_TRUSTED_UPSTREAM_IPS`로 그 게이트웨이의 (LAN 쪽)
-IP를 정확히 등록해야, claude-app의 에이전트가 "이 특정 peer에서 온 요청은 그쪽이 이미 검증한
-`X-Forwarded-For`를 신뢰"하도록 전환된다 — 등록 안 된 다른 모든 peer는 여전히 지금처럼
-소켓 주소로 무조건 덮어쓴다(스푸핑 방지). 신뢰는 헤더가 아니라 **접속이 실제로 그 IP에서
-왔다는 사실 자체**에 근거한다(nginx의 `set_real_ip_from`과 같은 모델) — LAN 안에서 그 IP를
-사칭하려면 그 정확한 호스트를 직접 장악해야 한다.
-
-예(iptables, 게이트웨이가 기존에 `--dport 3000`을 claude-app으로 DNAT하던 경우):
-
-```bash
-# 1) 기존 DNAT 규칙(포트 3000을 claude-app으로 직접 보내던 것)을 제거
-#    — 정확한 규칙은 환경마다 다르므로 iptables -t nat -L -n --line-numbers 으로 확인 후 삭제
-
-# 2) 같은 포트에서 이 에이전트를 직접 실행 — 이제 커널 NAT가 아니라 이 프로세스가 직접 받음
-AGENT_SOURCE_NAME=wg-gateway \
-AGENT_PUBLIC_PORT=3000 \
-AGENT_APP_HOST=192.168.1.179 \
-AGENT_APP_PORT=3000 \
-node ip-log-agent.mjs
-```
-
-claude-app 쪽(`claude-app-access-agent.service`)에는:
-
-```
-Environment=AGENT_TRUSTED_UPSTREAM_IPS=<게이트웨이의 LAN IP>
-```
-
-를 추가한다.
-
-### 신뢰 경계 (반드시 읽을 것)
-
-- 프록시된 실제 트래픽과 ingest 보고(그 안의 credential 포함) 모두 **평문 HTTP**로
-  오간다. 신뢰하는 사설 홈랩/Proxmox LAN 안에서만 이 상태로 두는 것을 전제로 한
-  설계다.
-- **신뢰할 수 없는 네트워크나 인터넷에는 이 구조를 그대로 노출하지 말 것** — 그런
-  환경에서는 ingest 경로 앞에 HTTPS 리버스 프록시나 암호화된 VPN/터널이 반드시
-  있어야 한다. `AGENT_INGEST_KEY`를 평문 HTTP로 인터넷을 거쳐 보내지 않는다.
-- 쿼리 문자열은 절대 저장하지 않는다(토큰/API 키 등 유출 방지) — 하지만 경로(pathname)
-  자체는 그대로 저장된다. `/reset/<token>` 처럼 경로에 민감한 값을 넣는 앱을 이 구조
-  뒤에 둔다면 그 경로를 `AGENT_SKIP_PATH_PREFIXES`에 추가해서 기록에서 제외해야 한다.
-
-### 위치(국가/도시) 표시와 GeoIP 프라이버시 트레이드오프
-
-`ACCESS_LOG_GEO_ENABLED`(기본 켜짐)가 켜져 있으면, 처음 보는 IP에 한해
-[ipwho.is](https://ipwho.is)(무료, API 키 불필요, **HTTPS**, 1,000회/일, 벌크 조회
-없음)로 국가/도시를 조회해 캐싱한다. `ip-api.com`도 검토했으나 무료 티어가 벌크 조회를
-지원하는 대신 **HTTPS를 지원하지 않아** IP를 평문으로 제3자에게 보내야 했다 — 이 프로젝트의
-조회는 애초에 요청 경로가 아니라 백그라운드에서 신규/오래된 IP에 한해서만 일어나므로,
-처리량보다 전송 암호화를 우선했다. "IP를 제3자에게 보낸다"와 "그걸 평문으로 보낸다"는
-서로 다른 트레이드오프이며, 이 앱은 후자를 피하는 쪽을 택했다. `ACCESS_LOG_GEO_ENABLED=false`로
-설정하면 위치 조회 자체를 완전히 끌 수 있다(IP만 기록).
-
-사설 대역(RFC1918, loopback 등)이나 IANA가 아직 글로벌 유니캐스트로 할당하지 않은 IPv6
-주소는 애초에 외부로 조회하지 않는다. 해석에 실패한 요청(429 등)은 재시도하고, 실패의
-원인이 "이 IP 하나의 문제"인지 "provider 전체 quota 문제"인지 구분해서 후자는 일정 시간
-전체 조회를 멈춘다.
-
-### 보존 기간
-
-접속 기록은 **90일** 보관 후 자동 삭제된다. 더 이상 남아있는 접속 기록이 없는 IP의 위치
-캐시도 함께 정리되어(다시 나타나면 재조회), 오래된 IP가 영구히 GeoIP 조회 quota를
-소모하지 않는다.
-
-## 알려진 한계 (의도적 설계 선택)
-
-| 한계 | 이유 / 대응 |
-|---|---|
-| 세션이 상태 비저장(stateless)이다 | 로그아웃은 브라우저에 쿠키 삭제를 지시할 뿐 서버 측 폐기 목록이 없다 — 탈취된 세션 토큰은 로그아웃 전이면 자연 만료(12시간)까지 재생 가능. 개인 단일 사용자 앱 위협 모델에서 감수 가능하다고 판단 |
-| 로그인 시도 제한이 단일 인스턴스·인메모리다 | 재시작하면 초기화된다 |
-| SQLite는 단일 서버·단일 인스턴스 운영을 전제한다 | SQLite 자체는 여러 프로세스 접근과 동시 쓰기 직렬화를 지원하지만(공식 FAQ), 네트워크 파일시스템에서는 잠금이 보장되지 않고, 애초에 수평 확장이 필요 없는 개인용 앱이라 단일 인스턴스로 설계 |
-| HTTPS가 앱 자체에 내장되어 있지 않다 | TLS 종단은 앞단 리버스 프록시 몫이다. 현재 운영은 Cloudflare(프록시, Full strict, Origin CA 인증서) → Nginx Proxy Manager → `ip-log-agent` → Next.js 구성. NPM은 `X-Forwarded-For`를 `$remote_addr`로 덮어써야 한다(`$proxy_add_x_forwarded_for` 금지) |
-| Proxmox 서버 이력은 저장하지 않는다 | 실시간 스냅샷만 보여준다 — Proxmox 자체가 이미 RRD 이력을 갖고 있어서, 중복 저장하지 않기로 함 |
-
-## 배포
-
-### systemd (실제 운영 중인 방식, 검증됨)
+### 운영 서버에 올리기 (systemd)
 
 ```bash
 npm run build
-mkdir -p ~/.config/systemd/user
-cp deploy/claude-app.service.example ~/.config/systemd/user/claude-app.service
-# 파일 안의 /home/YOUR_USER/claude-app 경로를 실제 설치 경로로 수정
+cp deploy/claude-app.service.example ~/.config/systemd/user/claude-app.service          # 경로 수정
+cp deploy/claude-app-access-agent.service.example ~/.config/systemd/user/claude-app-access-agent.service
 systemctl --user daemon-reload
-systemctl --user enable --now claude-app.service
-sudo loginctl enable-linger $USER   # 재부팅 시(로그인 없이도) 자동 시작
+systemctl --user enable --now claude-app.service claude-app-access-agent.service
+sudo loginctl enable-linger $USER         # 로그인 없이 부팅 시 시작
 ```
 
-root 권한 없이(linger 활성화 한 번만 예외) 등록 가능하다. 코드를 바꾼 뒤에는
-`npm run build && systemctl --user restart claude-app.service`로 재배포한다 — 정적 자산
-동기화(`scripts/sync-standalone-assets.sh`)는 서비스 시작 시 자동 실행된다. 실제로 강제
-종료(`kill -9`) 후 5초 내 자동 재시작되는 것까지 확인했다. 자세한 단계는 GUIDE.md의
-"systemd로 자동 실행 설정하기" 참고.
+자세한 단계, Docker 방식, 백업은 [docs/OPERATIONS.md](docs/OPERATIONS.md)에 있습니다.
 
-### Docker (작성됨, 이 개발 환경에서 미검증)
+---
+
+## ⚙ 환경 변수
+
+`.env.example`에 전체 목록과 설명이 있습니다. 필수 값이 없거나 형식이 틀리면 **요청을 받기 전에 서버가 스스로 종료**합니다.
+
+| 구분 | 변수 | 필수 | 설명 |
+|---|---|---|---|
+| 기본 | `DATABASE_URL` | ✅ | SQLite 파일 경로 |
+| 로그인 | `AUTH_PASSWORD_HASH` | ✅ | 비밀번호 bcrypt 해시 (`$` 적는 법 주의) |
+| 로그인 | `SESSION_SECRET` | ✅ | 세션 쿠키 서명 키 (32바이트 이상) |
+| 로그인 | `APP_ORIGIN` | ✅ | 접속 주소 목록(쉼표 구분). 로그인 등 쓰기 요청의 Origin이 **정확히** 이 중 하나여야 함 |
+| 로그인 | `FORCE_INSECURE_COOKIES` | 위험 | LAN에서 평문 HTTP로 테스트할 때만 `true`. HTTPS 운영에서는 쓰지 않음 |
+| 로그인 | `TRUSTED_PROXY` · `CLIENT_IP_HEADER` | 선택 | 신뢰하는 프록시 뒤에서만 켬 → IP별 로그인 제한. 없으면 서버 전체 제한 |
+| AI 사용량 | `CREDENTIAL_ENCRYPTION_KEY` | ✅ | 저장하는 ChatGPT 연결 정보 암호화 키 (SESSION_SECRET과 다른 값) |
+| AI 사용량 | `CODEX_CLI_PATH` | 선택 | `codex` 바이너리 경로 (기본 `node_modules/.bin/codex`) |
+| AI 사용량 | `OMNIROUTE_API_KEY` · `OMNIROUTE_CLAUDE_CONNECTION_ID` · `OMNIROUTE_BASE_URL` | 선택 | Claude 사용량을 읽을 OmniRoute. 키와 연결 ID가 있으면 켜짐 (주소는 기본값 있음) |
+| 서버 | `PROXMOX_URL` · `PROXMOX_TOKEN_ID` · `PROXMOX_TOKEN_SECRET` · `PROXMOX_SSL_FINGERPRINT` | 선택 | 넷 다 없으면 서버 패널은 "연결 안 됨", 나머지는 정상 |
+| 서버 | `PROXMOX_SSH_HOST` · `PROXMOX_SSH_KEY_PATH` | 선택 | 온도 조회용 SSH |
+| 접속 기록 | `ACCESS_LOG_INGEST_KEYS` | 선택 | `{"source 이름":"키", ...}` JSON. `.env` 또는 systemd 유닛의 `Environment=`에 둠 |
+| 접속 기록 | `ACCESS_LOG_GEO_ENABLED` | 선택 | 기본 켜짐. `false`면 위치 조회를 하지 않음 (⚠ 정리 작업도 함께 멈춤 — [알려진 한계](#-알려진-한계)) |
+
+> 💡 standalone 서버는 `.next/standalone/.env`를 읽습니다. `.env`를 고치면 그쪽 사본도 같이 고친 뒤 재시작하세요.
+
+---
+
+## 🧰 운영·배포·백업
+
+| 유닛 (systemd `--user`) | 하는 일 |
+|---|---|
+| `claude-app.service` | Next.js standalone 서버 (`127.0.0.1:3001`). 시작 전 `sync-standalone-assets.sh` 실행 |
+| `claude-app-access-agent.service` | 공개 포트 `:3000` → 앱, `claude-app` 접속 보고 |
+| `omniroute-access-agent.service` | OmniRoute 앞 중계 + `omniroute` 접속 보고 |
+| `stock-access-agent.service` | stock 서비스 앞 중계 + `stock` 접속 보고 (`:8081`) |
+
+| 작업 | 명령 |
+|---|---|
+| 상태 보기 | `systemctl --user status claude-app claude-app-access-agent` |
+| 로그 | `journalctl --user -u claude-app -f` |
+| 코드 반영 | `npm run build && systemctl --user restart claude-app` |
+| 강제 종료 시 | 5초 안에 자동 재시작 (`Restart=on-failure`) |
+| DB 백업 | 서비스를 멈추고 `cp prisma/dev.db backup-$(date +%F).db`, 또는 `sqlite3 prisma/dev.db "VACUUM INTO 'backup.db'"` |
+
+> ⚠️ `npm run build`는 운영 서버가 실행 중인 `.next/`를 바로 덮어씁니다. 빌드 후에는 곧바로 재시작하세요.
+> 운영 중인 SQLite 파일을 그냥 복사하지 마세요 (WAL 모드에서 일관되지 않은 사본이 될 수 있음).
+
+---
+
+## 🔌 API
+
+`/api/auth/login`과 `/api/access-log/ingest`를 뺀 모든 `/api/*`는 로그인 쿠키가 필요합니다. `proxy.ts`와 **각 Route Handler가 따로** 검사합니다.
+
+| 메서드 | 경로 | 설명 |
+|---|---|---|
+| POST | `/api/auth/login` · `/api/auth/logout` | 로그인 / 로그아웃 (Origin 검사) |
+| GET | `/api/ai-usage/cards` | 한도별 최신 카드 상태 |
+| GET | `/api/ai-usage/chart?metricId=&range=` | 이력 그래프 (최대 600점, LTTB 다운샘플) |
+| GET · DELETE | `/api/ai-usage` · `/api/ai-usage/{id}` | 기록 목록(페이지) / 기록 삭제 |
+| GET · POST · DELETE | `/api/ai-usage/connections` | ChatGPT 연결 상태 / 기기 코드 로그인 시작 / 연결 해제 |
+| GET | `/api/ai-usage/connections/poll` | 기기 코드 로그인 완료 확인 |
+| POST | `/api/ai-usage/connections/collect` · `/api/ai-usage/omniroute/collect` | 지금 수집 (Codex / Claude) |
+| GET | `/api/proxmox/status` | 호스트·스토리지·게스트 상태 |
+| GET | `/api/lotto/cards` | 이번 주 조합 |
+| GET | `/api/access-log/summary?minHitCount=` | 고유 IP 요약 (위험 여부 포함) |
+| GET · DELETE | `/api/access-log/entries?ip=` | IP별 개별 기록 / 그 IP 기록 삭제 |
+| POST | `/api/access-log/ingest` | **서버 간 전용.** `Authorization: Bearer <source 키>`, 본문 4KB 제한 |
+
+---
+
+## 🧪 테스트
+
+DB·인증·네트워크 없이 도는 유닛 테스트 **168개**와, 실행 중인 서버에 실제 HTTP로 요청하는 통합 테스트가 있습니다.
 
 ```bash
-cp .env.example .env   # AUTH_PASSWORD_HASH(위 이스케이프 주의)/SESSION_SECRET/APP_ORIGIN 채우기
-docker compose build
-docker compose up -d
+npm run test:unit
+npm run build && npm run start:standalone            # 다른 터미널
+BASE_URL=http://localhost:3000 TEST_PASSWORD=<비밀번호> npm run test:integration
 ```
 
-- `output: standalone`(next.config.ts)로 빌드하고, `public/`, `.next/static/`,
-  Prisma 생성 클라이언트(`src/generated/prisma`)를 Dockerfile이 명시적으로 복사한다 —
-  standalone 출력은 이 셋을 자동으로 포함하지 않는다.
-- 컨테이너 시작 시 `docker-entrypoint.sh`가 로컬에 이미 설치된 `prisma` CLI로
-  `migrate deploy`를 실행(네트워크 다운로드 없음)하고, 실패하면 서버를 기동하지 않는다.
-- **외부 인터넷에 노출하는 배포는 HTTPS가 필수**다(어느 배포 방식이든 동일) — 세션 쿠키는
-  프로덕션 모드에서 `Secure` 플래그가 켜지므로, 리버스 프록시(Caddy/nginx 등)로 TLS를
-  종단해야 로그인이 실제로 동작한다.
+| 파일 | 다루는 내용 |
+|---|---|
+| `modules/ai-usage/logic.test.ts` | 입력 검증 · 카드 상태(정상/오래됨/기간 종료) · 최신 기록 선택 · 경고 색 · 초기화 카운트다운 · **LTTB 다운샘플**(최고점 보존) · 퍼센트 표시 |
+| `modules/ai-usage/collector/logic.test.ts` | Codex 응답 → 5시간·주간 지표 매핑 · 토큰 갱신 시점 |
+| `modules/access-log/logic.test.ts` | IP 정규화(IPv4-mapped 등) · 공인 IP 판정(IANA 표 기반) · ingest 스키마 · **위험 경로** · IP 요약 병합 |
+| `modules/lotto/logic.test.ts` · `parser.test.ts` | 번호 빈도 그룹 · 조합 유효성 규칙 · 조합 생성 · 주목할 부분조합 · 카드 상태 · 당첨 번호 페이지 파싱 |
+| `modules/proxmox/format.test.ts` · `errors.test.ts` | 용량·가동 시간 표시 · 일시 오류 문구 |
+| `lib/datetime.test.ts` | 서버 환경과 무관한 KST 날짜 표시 |
+| `app.integration.test.ts` | 인증 우회 · CSRF(Origin) · 입력 검증 · 로그인 제한 · 만료/변조 쿠키 · 삭제 후 폴백 |
 
-## 백업 / 복구
+UI 변경은 운영과 분리된 사본(임시 비밀값·비밀 없는 DB·별도 포트)을 헤드리스 Chromium으로 띄워 여러 화면 폭과 두 테마에서 확인합니다.
 
-운영 중인 SQLite 파일을 그냥 복사하지 않는다(WAL 모드에서 일관되지 않은 스냅샷이 될 수
-있음). 다음 중 하나를 사용한다:
+---
 
-```bash
-# (a) 프로세스를 멈추고 파일 복사 — 가장 단순하고 확실함
-systemctl --user stop claude-app.service   # 또는 docker compose stop app
-cp prisma/dev.db backup-$(date +%F).db
-systemctl --user start claude-app.service
+## 🔒 보안 설계
 
-# (b) 온라인 상태에서 일관된 스냅샷
-sqlite3 prisma/dev.db "VACUUM INTO 'backup.db'"
-```
+| 영역 | 조치 |
+|---|---|
+| 인증 경계 | `proxy.ts`는 안내용일 뿐, **모든 페이지와 API가 각자 세션을 다시 검사**. Next.js 미들웨어 우회 헤더(`x-middleware-subrequest`)로도 401 |
+| 세션 | iron-session 서명 쿠키 `HttpOnly` · `SameSite=Lax` · 운영에서 `Secure` · 12시간 만료 |
+| 비밀번호 | bcrypt(cost 12) 해시만 저장, 해시 생성은 대화형 입력(명령 인자로 넘기지 않음) |
+| CSRF | 쓰기 요청의 Origin이 `APP_ORIGIN` 목록과 **정확히** 같아야 함 (다른 사이트 → 403) |
+| 로그인 시도 | 1분에 5번 틀리면 1분 잠금 (신뢰 프록시 설정 시 IP별, 아니면 서버 전체) |
+| 저장하는 비밀 | ChatGPT 연결 정보는 AES-256-GCM으로 암호화. Claude 인증 정보는 이 앱이 다루지 않음(OmniRoute 관리 키만) |
+| 외부 연결 | Proxmox는 인증서 지문 고정, 위치 조회는 HTTPS 제공자만 사용 |
+| 접속 기록 ingest | source별 키, 시간 일정 비교, 알 수 없는 source와 틀린 키는 같은 401, 본문 4KB 제한 |
+| 응답 헤더 | `X-Frame-Options: DENY` · `X-Content-Type-Options: nosniff` |
+| 공개 파일 | `public/`에는 아이콘뿐. `.env`·`.git` 요청은 로그인 화면으로 이동 |
+| 비밀값 | `.env`, DB, `backups/`는 `.gitignore`로 제외. 스크린샷은 합성 데이터 |
 
-## PostgreSQL로 전환하고 싶다면
+---
 
-`DATABASE_URL`만 바꾼다고 되지 않는다. 실제로는 (1) `schema.prisma`의 provider와 드라이버
-어댑터 교체, (2) Postgres 방언에 맞는 마이그레이션 재작성, (3) 기존 SQLite 데이터를
-Postgres로 옮기는 별도 이전 작업이 필요하다. 모든 DB 접근이 `src/modules/*/service.ts`에
-모여 있으므로, 전환 시 영향 범위는 그 파일들로 한정된다.
+## ⚠ 알려진 한계
 
-## 새 모듈 추가하기
-
-`src/modules/registry.ts`에 항목을 추가하면 사이드바 메뉴와 홈 화면 위젯 노출까지는
-자동으로 처리된다(배열 순서 = 홈 화면 섹션 순서). 그 외 페이지, API 라우트, (필요하다면)
-Prisma 스키마와 마이그레이션은 새 모듈이 직접 갖춰야 한다 — 레지스트리가 공통 셸(레이아웃/
-사이드바) 코드를 건드리지 않고 모듈을 노출해줄 뿐, 모듈 자체를 만들어주지는 않는다.
-`proxmox`, `lotto` 두 모듈 모두 이 패턴이 반복 적용됨을 확인해준 사례다.
-
-## 테스트
-
-```bash
-npm run test:unit          # 순수 로직/검증 스키마 — DB·인증·네트워크 불필요, 166개
-npm run build && npm run start:standalone   # 프로덕션 빌드로 서버 기동 (다른 터미널)
-BASE_URL=http://localhost:3000 TEST_PASSWORD=<로그인 비밀번호> npm run test:integration
-```
-
-`test:integration`은 실행 중인 서버 + `DATABASE_URL`(서버와 동일한 값)이 필요하다 — 인증
-우회, CSRF Origin 검증, 입력 검증, 최신 기록 선택(삽입 순서 아님), 삭제 후 폴백 등을 실제
-HTTP 요청으로 검증한다(테스트 데이터는 공개 create 엔드포인트가 없어 Prisma로 직접 시딩).
-
-## 검증 상태
-
-확인 방법별로 구분한다(방법이 다르면 증명하는 범위도 다르다):
-
-- **실제 운영 환경에서 라이브로 확인**: systemd 서비스 기동·요청 처리·강제종료 후 5초 내
-  자동 재시작, Proxmox API 토큰 인증 + TLS 인증서 지문 고정(정상/위조 지문 양쪽 모두 별도
-  프로세스에서 재검증), SSH 기반 `lm-sensors` 온도 조회, Codex 기기 코드 로그인 전 과정
-  (본인 계정으로 실제 로그인 완료 → `wham/usage` 실제 응답 확보 → 지표 매핑 → 홈 카드 반영).
-- **HTTP/서버 레벨로 실행해 확인**: 유닛 테스트 166/166, 프로덕션 standalone 서버를 실제로
-  띄워 통합 테스트로 로그인·CRUD·카드 상태 전이·CSRF·만료/변조 쿠키 거부·로그인 시도 제한·
-  부팅 시 필수 환경변수 검증을 확인.
-- **로또 모듈 실측 검증**: 격리된 DB 사본 + 별도 포트로 개발 서버를 띄워, 백그라운드
-  스케줄러가 `superkts.com`에서 실제 1회~1240회 전체(약 124페이지)를 스크레이핑해 저장하고
-  1240회 기준 조합 5세트를 생성하는 전체 파이프라인을 종단 간(end-to-end) 확인했다. 이어서
-  서버를 재기동해 두 번째 틱을 재현했고, 이미 저장된 회차·이미 생성된 조합 세트를 다시
-  만들지 않는(고유 제약 기반 멱등성) 것도 확인했다.
-- **문서로만 확인**(실행 재현은 아님): Docker Compose `.env`의 작은따옴표 규칙(공식 문서
-  인용), 브라우저의 `http://localhost` Secure 쿠키 예외(일반적으로 알려진 동작).
-- **헤드리스 브라우저로 확인**: 디자인 개편 때 운영과 분리된 사본(임시 비밀값, 비밀 없는 DB
-  일부만 복사, 별도 포트)을 띄워 headless Chromium으로 여러 화면 폭·양쪽 테마 레이아웃,
-  테마/사이드바 접기 상태 유지, 모바일 서랍(Escape·배경 클릭), 접속 기록 펼치기·삭제를
-  확인했다. 실제 Proxmox 데이터가 들어간 화면은 사본에서 볼 수 없어 운영 화면에서 직접 확인이 필요하다.
-- **Docker 빌드/배포**: 이 개발 환경에 Docker 자체가 없어(`docker: command not found`)
-  이미지 빌드, 컨테이너 기동, 볼륨 퍼시스턴스, `docker compose`의 `.env` 인터폴레이션 실제
-  동작은 전혀 실행해보지 못했다 — 이 방식을 쓴다면 최초 한 번 반드시 직접 확인이 필요하다.
-
-**테스트용 값 사용 금지**: 개발 중 검증에 쓴 비밀번호나 `SESSION_SECRET` 등은 로컬 검증
-목적으로 생성한 것이다. 실제 배포 전 반드시 `node scripts/hash-password.mjs`로 본인
-비밀번호를 재생성하고, `SESSION_SECRET`·`CREDENTIAL_ENCRYPTION_KEY`도 새로 생성해야 한다.
+- **1인용·단일 인스턴스**입니다. 세션은 서버 쪽 폐기 목록이 없어(상태 없는 쿠키) 로그아웃 전 탈취된 쿠키는 만료(12시간)까지 유효하고, 로그인 시도 제한은 메모리에만 있어 재시작하면 초기화됩니다.
+- SQLite 한 파일을 쓰므로 여러 서버로 늘릴 수 없습니다. PostgreSQL 전환은 `DATABASE_URL`만 바꿔서는 안 됩니다 → [docs/OPERATIONS.md](docs/OPERATIONS.md#-postgresql로-전환하고-싶다면)
+- 앱 자체에는 HTTPS가 없습니다. TLS는 앞단(Cloudflare → NPM)이 맡고, 평문 경로로 로그인하면 비밀번호가 암호화되지 않은 채 오갑니다.
+- 프로덕션 빌드는 운영 디렉터리(`.next/`)에 바로 씁니다. 빌드와 재시작 사이에는 새 파일과 옛 프로세스가 섞입니다.
+- `ACCESS_LOG_GEO_ENABLED=false`로 위치 조회를 끄면 **10분 주기 정리 작업(90일 삭제·1만 건 초기화)도 함께 멈춥니다.**
+- 위험 IP 표시는 경로 목록 기반 추정입니다. 새로운 공격은 놓치고, 이름이 비슷한 정상 경로를 잘못 표시할 수 있습니다.
+- TCP 중계(Proxmox 웹, 마인크래프트)는 암호화된 내용을 보지 않으므로 **로그인 시도 같은 세부 내용은 기록되지 않고** 연결만 남습니다.
+- Codex 사용량은 비공식 내부 API(`wham/usage`)를 씁니다. 응답 형식이 바뀌면 수집이 실패할 수 있습니다.
+- Proxmox 이력은 저장하지 않습니다(Proxmox 자체 RRD가 있음). QEMU VM은 디스크 사용량이 0으로 보일 수 있습니다.
+- 로또 조합은 과거 통계에 맞춘 것일 뿐 당첨 확률을 높이지 않습니다.
+- Docker 배포 파일은 작성만 됐고, 이 개발 환경에서는 실행해 보지 못했습니다.
