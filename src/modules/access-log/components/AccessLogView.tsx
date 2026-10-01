@@ -21,13 +21,34 @@ interface AccessLogViewProps {
   note?: string;
   /** Panel heading (home dashboard only). */
   title?: string;
+  /** Show the "delete everything" button — the full /access-log page only,
+   * never the home widget. */
+  allowDeleteAll?: boolean;
 }
 
-export function AccessLogView({ initialSummaries, minHitCount = 0, note, title }: AccessLogViewProps) {
+export function AccessLogView({ initialSummaries, minHitCount = 0, note, title, allowDeleteAll = false }: AccessLogViewProps) {
   const [summaries, setSummaries] = useState(initialSummaries);
   const [refreshing, setRefreshing] = useState(false);
   const [expandedIp, setExpandedIp] = useState<string | null>(null);
   const [deletingIp, setDeletingIp] = useState<string | null>(null);
+  const [deletingAll, setDeletingAll] = useState(false);
+
+  async function handleDeleteAll() {
+    if (deletingAll) return;
+    if (!window.confirm(`접속 기록 전체(고유 IP ${summaries.length}개)를 삭제할까요?\n되돌릴 수 없습니다.`)) return;
+    setDeletingAll(true);
+    try {
+      const res = await fetch("/api/access-log/entries?all=true", { method: "DELETE" });
+      if (res.ok) {
+        setSummaries([]);
+        setExpandedIp(null);
+      }
+    } catch {
+      // Transient network error: nothing changed, user can retry.
+    } finally {
+      setDeletingAll(false);
+    }
+  }
 
   async function handleDelete(ip: string) {
     if (deletingIp) return;
@@ -71,9 +92,23 @@ export function AccessLogView({ initialSummaries, minHitCount = 0, note, title }
         </>
       }
       actions={
-        <IconButton type="button" onClick={handleRefresh} disabled={refreshing} title="지금 새로고침" aria-label="지금 새로고침">
-          <RefreshCw size={16} className={refreshing ? "animate-spin" : ""} />
-        </IconButton>
+        <>
+          <IconButton type="button" onClick={handleRefresh} disabled={refreshing} title="지금 새로고침" aria-label="지금 새로고침">
+            <RefreshCw size={16} className={refreshing ? "animate-spin" : ""} />
+          </IconButton>
+          {allowDeleteAll && (
+            <IconButton
+              type="button"
+              onClick={handleDeleteAll}
+              disabled={deletingAll || summaries.length === 0}
+              title="접속 기록 전체 삭제"
+              aria-label="접속 기록 전체 삭제"
+              className="hover:bg-red-50 hover:text-red-500 dark:hover:bg-red-950"
+            >
+              <Trash2 size={16} />
+            </IconButton>
+          )}
+        </>
       }
     >
       {summaries.length === 0 ? (

@@ -158,6 +158,16 @@ export async function deleteIpHistory(ip: string): Promise<void> {
 }
 
 /**
+ * Wipes the whole access log — every IP from every source — plus the
+ * location cache, in one transaction. Agents keep reporting afterwards, so
+ * new rows start appearing again right away.
+ */
+export async function deleteAllAccessLog(): Promise<number> {
+  const [entries] = await prisma.$transaction([prisma.accessLogEntry.deleteMany(), prisma.ipGeoCache.deleteMany()]);
+  return entries.count;
+}
+
+/**
  * Deletes IpGeoCache rows for IPs with no remaining AccessLogEntry row —
  * run right after pruning, so a resolved location doesn't keep consuming
  * GeoIP quota (or DB space) for an IP the dashboard no longer shows at all.

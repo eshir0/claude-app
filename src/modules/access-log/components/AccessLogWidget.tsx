@@ -5,5 +5,5 @@ import { AccessLogView } from "./AccessLogView";
 export default async function AccessLogWidget() {
   await requireSessionPage();
   const summaries = await getIpSummaries();
-  return <AccessLogView initialSummaries={summaries} />;
+  return <AccessLogView initialSummaries={summaries} allowDeleteAll />;
 }

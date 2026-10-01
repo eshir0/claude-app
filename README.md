@@ -147,7 +147,7 @@ AI 사용량 패널의 새로고침 버튼은 그 자리에서 바로 수집하�
 | **AI 사용량** | `/ai-usage` · `/ai-usage/connections` | 한도별 남은 %(경고 색) · 초기화 시각과 카운트다운 · 30일 이력 그래프 · 전체 기록 표 | Codex CLI의 기기 코드 OAuth → `chatgpt.com/backend-api/wham/usage` · OmniRoute 관리 API(`/api/usage/{id}`) |
 | **서버** | `/server` | 호스트 CPU·메모리·루트 디스크·가동 시간·CPU/내장 GPU/NVMe 온도 · 스토리지 풀 · VM·LXC 표(75% 주황, 90% 빨강) | Proxmox API 토큰(인증서 지문 고정) · 온도는 SSH + `lm-sensors`(선택) |
 | **로또 번호 생성** | `/lotto` | 조합 5세트 · 번호별 빈출/저빈도 구분 · 홀짝·고저·합계 · 주목할 부분조합 | `superkts.com` 당첨 번호 목록 스크레이핑 |
-| **접속 기록** | `/access-log` | 고유 IP별 위치·서버·횟수·최초/최근 접속 · 클릭하면 개별 요청 · 위험 IP 빨간색 · IP 삭제 | 각 서버 앞의 중계 스크립트가 보고 · 위치는 ipwho.is |
+| **접속 기록** | `/access-log` | 고유 IP별 위치·서버·횟수·최초/최근 접속 · 클릭하면 개별 요청 · 위험 IP 빨간색 · IP별 삭제 · 전체 삭제 | 각 서버 앞의 중계 스크립트가 보고 · 위치는 ipwho.is |
 
 | 홈 화면 배치 | |
 |---|---|
@@ -348,6 +348,7 @@ sudo loginctl enable-linger $USER         # 로그인 없이 부팅 시 시작
 | GET | `/api/lotto/cards` | 이번 주 조합 |
 | GET | `/api/access-log/summary?minHitCount=` | 고유 IP 요약 (위험 여부 포함) |
 | GET · DELETE | `/api/access-log/entries?ip=` | IP별 개별 기록 / 그 IP 기록 삭제 |
+| DELETE | `/api/access-log/entries?all=true` | 접속 기록 **전체** 삭제 (Origin 검사, `ip`와 함께 쓰면 400) |
 | POST | `/api/access-log/ingest` | **서버 간 전용.** `Authorization: Bearer <source 키>`, 본문 4KB 제한 |
 
 ---
