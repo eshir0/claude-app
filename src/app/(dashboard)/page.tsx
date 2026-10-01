@@ -20,10 +20,7 @@ export default function HomePage() {
 
   return (
     <div className="flex flex-col gap-6 sm:gap-8">
-      <header className="flex flex-col gap-1">
-        <h1 className="text-2xl font-semibold tracking-tight text-text sm:text-3xl">홈</h1>
-        <p className="text-sm text-text-muted">{placed.map((m) => m.label).join(" · ")}</p>
-      </header>
+      <h1 className="text-xl font-semibold tracking-tight text-text">홈</h1>
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-12 xl:gap-6">
         {placed.map((mod) => (
           <div key={mod.id} className={`min-w-0 ${(HOME_LAYOUT[mod.id] ?? FALLBACK).span}`}>
