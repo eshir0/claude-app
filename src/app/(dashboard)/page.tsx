@@ -19,7 +19,7 @@ export default function HomePage() {
     .sort((a, b) => (HOME_LAYOUT[a.id] ?? FALLBACK).order - (HOME_LAYOUT[b.id] ?? FALLBACK).order);
 
   return (
-    <div className="flex flex-col gap-6 sm:gap-8">
+    <div className="flex flex-col gap-4">
       <h1 className="text-xl font-semibold tracking-tight text-text">홈</h1>
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-12 xl:gap-6">
         {placed.map((mod) => (
