@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { RefreshCw } from "lucide-react";
-import type { ProxmoxOverview } from "../types";
+import type { ProxmoxGuestStatus, ProxmoxOverview } from "../types";
+import type { GuestDiskUnavailableReason } from "../guest-disk";
 import {
   formatBytes,
   formatPercent,
@@ -37,6 +38,41 @@ function MetricBar({ label, fraction, valueText }: { label: string; fraction: nu
       </div>
       <ProgressBar value={fraction * 100} indicatorClassName={styles.bar} className="mt-1" />
     </div>
+  );
+}
+
+const DISK_UNAVAILABLE_TEXT: Record<GuestDiskUnavailableReason, { label: string; title: string }> = {
+  stopped: { label: "", title: "꺼져 있는 VM은 디스크 사용량을 알 수 없습니다" },
+  "no-agent": {
+    label: "에이전트 필요",
+    title: "VM 안에 QEMU 게스트 에이전트가 설치·실행되고, VM 옵션에서 QEMU Guest Agent가 켜져 있어야 사용량이 보입니다",
+  },
+  "no-permission": {
+    label: "권한 필요",
+    title: "Proxmox API 토큰에 VM.GuestAgent.Audit 권한이 있어야 VM 안의 사용량을 읽을 수 있습니다",
+  },
+};
+
+/** Disk column: real usage when known (LXC, or a VM via its guest agent),
+ * otherwise "— / provisioned size" plus why — never a fake "0 GB used". */
+function GuestDiskCell({ guest: g }: { guest: ProxmoxGuestStatus }) {
+  if (g.diskSource === "unavailable") {
+    const why = DISK_UNAVAILABLE_TEXT[g.diskUnavailableReason ?? "no-agent"];
+    return (
+      <td className="px-3 py-2 tabular-nums text-text-muted" title={why.title}>
+        — {g.diskTotal > 0 && <>/ {formatBytes(g.diskTotal)}</>}
+        {why.label && <span className="ml-1.5 text-xs">· {why.label}</span>}
+      </td>
+    );
+  }
+  const fraction = g.diskTotal > 0 ? g.diskUsed / g.diskTotal : 0;
+  return (
+    <td
+      className={`px-3 py-2 tabular-nums ${usageLevelClass(fraction)}`}
+      title={g.diskSource === "guest-agent" ? "VM 안의 파일시스템 기준 (QEMU 게스트 에이전트)" : undefined}
+    >
+      {g.diskTotal > 0 ? `${formatBytes(g.diskUsed)} / ${formatBytes(g.diskTotal)}` : "—"}
+    </td>
   );
 }
 
@@ -245,17 +281,7 @@ export default function ServerView({ configured, initialOverview, initialError, 
                         <td className="px-3 py-2 tabular-nums">
                           {g.status === "running" ? `${formatBytes(g.memUsed)} / ${formatBytes(g.memTotal)}` : "—"}
                         </td>
-                        <td
-                          className={`px-3 py-2 tabular-nums ${usageLevelClass(g.diskTotal > 0 ? g.diskUsed / g.diskTotal : 0)}`}
-                        >
-                          {g.diskTotal > 0 ? (
-                            <>
-                              {formatBytes(g.diskUsed)} / {formatBytes(g.diskTotal)}
-                            </>
-                          ) : (
-                            "—"
-                          )}
-                        </td>
+                        <GuestDiskCell guest={g} />
                         <td className="px-3 py-2">{g.status === "running" ? formatUptime(g.uptimeSeconds) : "—"}</td>
                       </tr>
                   ))

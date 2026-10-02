@@ -1,3 +1,5 @@
+import type { GuestDiskUnavailableReason } from "./guest-disk";
+
 export interface ProxmoxNodeStatus {
   node: string;
   cpuFraction: number; // 0-1, host-wide CPU load
@@ -19,13 +21,17 @@ export interface ProxmoxGuestStatus {
   memUsed: number;
   memTotal: number;
   uptimeSeconds: number;
-  /** LXC containers report real disk usage. QEMU VMs typically report 0
-   * here (the hypervisor can't see inside a virtual disk's filesystem
-   * without a guest agent) even though diskTotal is a real provisioned
-   * size — shown as-is rather than hidden, so a "VM 0GB used" isn't
-   * mistaken for a bug. */
+  /** Meaningful only when diskSource isn't "unavailable". */
   diskUsed: number;
+  /** Filesystem size for "proxmox"/"guest-agent"; the provisioned virtual
+   * disk size when "unavailable". */
   diskTotal: number;
+  /** Where diskUsed comes from: Proxmox itself (LXC), the QEMU guest agent
+   * inside a running VM, or nowhere — Proxmox reports 0 for every QEMU VM,
+   * which used to be shown as if the VM's disk were empty. */
+  diskSource: "proxmox" | "guest-agent" | "unavailable";
+  /** Set only when diskSource is "unavailable". */
+  diskUnavailableReason: GuestDiskUnavailableReason | null;
 }
 
 /** A Datacenter-level storage pool (e.g. "local-lvm") — where VM/container

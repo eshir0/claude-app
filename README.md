@@ -145,7 +145,7 @@ AI 사용량 패널의 새로고침 버튼은 그 자리에서 바로 수집하�
 | 모듈 | 경로 | 보여 주는 것 | 데이터 출처 |
 |---|---|---|---|
 | **AI 사용량** | `/ai-usage` · `/ai-usage/connections` | 한도별 남은 %(경고 색) · 초기화 시각과 카운트다운 · 30일 이력 그래프 · 전체 기록 표 | Codex CLI의 기기 코드 OAuth → `chatgpt.com/backend-api/wham/usage` · OmniRoute 관리 API(`/api/usage/{id}`) |
-| **서버** | `/server` | 호스트 CPU·메모리·루트 디스크·가동 시간·CPU/내장 GPU/NVMe 온도 · 스토리지 풀 · VM·LXC 표(75% 주황, 90% 빨강) | Proxmox API 토큰(인증서 지문 고정) · 온도는 SSH + `lm-sensors`(선택) |
+| **서버** | `/server` | 호스트 CPU·메모리·루트 디스크·가동 시간·CPU/내장 GPU/NVMe 온도 · 스토리지 풀(이름 순) · VM·LXC 표(QEMU → LXC, VMID 순 · 75% 주황, 90% 빨강 · VM 디스크는 게스트 에이전트 기준) | Proxmox API 토큰(인증서 지문 고정) · 온도는 SSH + `lm-sensors`(선택) |
 | **로또 번호 생성** | `/lotto` | 조합 5세트 · 번호별 빈출/저빈도 구분 · 홀짝·고저·합계 · 주목할 부분조합 | `superkts.com` 당첨 번호 목록 스크레이핑 |
 | **접속 기록** | `/access-log` | 고유 IP별 위치·서버·횟수·최초/최근 접속 · 클릭하면 개별 요청 · 위험 IP 빨간색 · IP별 삭제 · 전체 삭제 | 각 서버 앞의 중계 스크립트가 보고 · 위치는 ipwho.is |
 
@@ -355,7 +355,7 @@ sudo loginctl enable-linger $USER         # 로그인 없이 부팅 시 시작
 
 ## 🧪 테스트
 
-DB·인증·네트워크 없이 도는 유닛 테스트 **168개**와, 실행 중인 서버에 실제 HTTP로 요청하는 통합 테스트가 있습니다.
+DB·인증·네트워크 없이 도는 유닛 테스트 **176개**와, 실행 중인 서버에 실제 HTTP로 요청하는 통합 테스트가 있습니다.
 
 ```bash
 npm run test:unit
@@ -369,7 +369,7 @@ BASE_URL=http://localhost:3000 TEST_PASSWORD=<비밀번호> npm run test:integra
 | `modules/ai-usage/collector/logic.test.ts` | Codex 응답 → 5시간·주간 지표 매핑 · 토큰 갱신 시점 |
 | `modules/access-log/logic.test.ts` | IP 정규화(IPv4-mapped 등) · 공인 IP 판정(IANA 표 기반) · ingest 스키마 · **위험 경로** · IP 요약 병합 |
 | `modules/lotto/logic.test.ts` · `parser.test.ts` | 번호 빈도 그룹 · 조합 유효성 규칙 · 조합 생성 · 주목할 부분조합 · 카드 상태 · 당첨 번호 페이지 파싱 |
-| `modules/proxmox/format.test.ts` · `errors.test.ts` | 용량·가동 시간 표시 · 일시 오류 문구 |
+| `modules/proxmox/format.test.ts` · `errors.test.ts` · `guest-disk.test.ts` | 용량·가동 시간 표시 · 일시 오류 문구 · 게스트 에이전트 파일시스템 합산(중복 마운트·snap·네트워크 공유 제외) · 실패 원인 구분 |
 | `lib/datetime.test.ts` | 서버 환경과 무관한 KST 날짜 표시 |
 | `app.integration.test.ts` | 인증 우회 · CSRF(Origin) · 입력 검증 · 로그인 제한 · 만료/변조 쿠키 · 삭제 후 폴백 |
 
@@ -405,6 +405,7 @@ UI 변경은 운영과 분리된 사본(임시 비밀값·비밀 없는 DB·별�
 - 위험 IP 표시는 경로 목록 기반 추정입니다. 새로운 공격은 놓치고, 이름이 비슷한 정상 경로를 잘못 표시할 수 있습니다.
 - TCP 중계(Proxmox 웹, 마인크래프트)는 암호화된 내용을 보지 않으므로 **로그인 시도 같은 세부 내용은 기록되지 않고** 연결만 남습니다.
 - Codex 사용량은 비공식 내부 API(`wham/usage`)를 씁니다. 응답 형식이 바뀌면 수집이 실패할 수 있습니다.
-- Proxmox 이력은 저장하지 않습니다(Proxmox 자체 RRD가 있음). QEMU VM은 디스크 사용량이 0으로 보일 수 있습니다.
+- Proxmox 이력은 저장하지 않습니다(Proxmox 자체 RRD가 있음).
+- QEMU VM의 디스크 사용량은 VM 안에 **QEMU 게스트 에이전트**가 실행 중이고 API 토큰에 `VM.GuestAgent.Audit` 권한이 있을 때만 보입니다. 아니면 `— / 할당 용량 · 에이전트 필요`(또는 `권한 필요`)로 표시하고, 0으로 꾸며 내지 않습니다.
 - 로또 조합은 과거 통계에 맞춘 것일 뿐 당첨 확률을 높이지 않습니다.
 - Docker 배포 파일은 작성만 됐고, 이 개발 환경에서는 실행해 보지 못했습니다.
